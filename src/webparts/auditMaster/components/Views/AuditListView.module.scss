@@ -1,0 +1,165 @@
+@import '~@microsoft/sp-office-ui-fabric-core/dist/sass/SPFabricCore.scss';
+
+.listViewContainer {
+  padding: 24px;
+}
+
+.viewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h3 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 0;
+  }
+}
+
+.filterBar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.searchBox {
+  min-width: 260px;
+}
+
+.statsBar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.statCard {
+  background: #ffffff;
+  border: 1px solid #edebe9;
+  border-radius: 8px;
+  padding: 12px 20px;
+  min-width: 120px;
+  text-align: center;
+
+  .statValue {
+    font-size: 24px;
+    font-weight: 700;
+    color: #1a1a2e;
+  }
+
+  .statLabel {
+    font-size: 12px;
+    color: #605e5c;
+    margin-top: 2px;
+  }
+
+  &.open { border-top: 3px solid #0078d4; }
+  &.inProgress { border-top: 3px solid #ffaa44; }
+  &.pending { border-top: 3px solid #8764b8; }
+  &.closed { border-top: 3px solid #107c10; }
+  &.overdue { border-top: 3px solid #d13438; }
+}
+
+.tableWrapper {
+  background: #ffffff;
+  border: 1px solid #edebe9;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th {
+    background: #faf9f8;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: #323130;
+    border-bottom: 1px solid #edebe9;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f3f2f1;
+    color: #323130;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  tr:hover {
+    background: #f3f2f1;
+    cursor: pointer;
+  }
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &.open { background: #deecf9; color: #0078d4; }
+  &.inProgress { background: #fff4ce; color: #986f0b; }
+  &.pendingVerification { background: #e8dff5; color: #8764b8; }
+  &.closed { background: #dff6dd; color: #107c10; }
+  &.overdue { background: #fde7e9; color: #d13438; }
+  &.cancelled { background: #edebe9; color: #605e5c; }
+}
+
+.priorityBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+
+  &.critical { background: #d13438; color: #fff; }
+  &.high { background: #ff8c00; color: #fff; }
+  &.medium { background: #ffb900; color: #323130; }
+  &.low { background: #107c10; color: #fff; }
+}
+
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  color: #605e5c;
+
+  .emptyIcon {
+    font-size: 48px;
+    color: #c8c6c4;
+    margin-bottom: 12px;
+  }
+
+  h4 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    color: #323130;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid #edebe9;
+  font-size: 13px;
+  color: #605e5c;
+}

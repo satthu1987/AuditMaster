@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/package-solution.schema.json",
+  "solution": {
+    "name": "audit-master-client-side-solution",
+    "id": "9a49803d-de22-4813-aefe-0fc2fbe9df85",
+    "version": "1.0.0.0",
+    "includeClientSideAssets": true,
+    "skipFeatureDeployment": true,
+    "isDomainIsolated": false,
+    "developer": {
+      "name": "",
+      "websiteUrl": "",
+      "privacyUrl": "",
+      "termsOfUseUrl": "",
+      "mpnId": "Undefined-1.20.0"
+    },
+    "metadata": {
+      "shortDescription": {
+        "default": "audit-master description"
+      },
+      "longDescription": {
+        "default": "audit-master description"
+      },
+      "screenshotPaths": [],
+      "videoUrl": "",
+      "categories": []
+    },
+    "features": [
+      {
+        "title": "audit-master Feature",
+        "description": "The feature that activates elements of the audit-master solution.",
+        "id": "d76ba864-289e-4912-81f7-a014961b0e45",
+        "version": "1.0.0.0"
+      }
+    ]
+  },
+  "paths": {
+    "zippedPackage": "solution/audit-master.sppkg"
+  }
+}
