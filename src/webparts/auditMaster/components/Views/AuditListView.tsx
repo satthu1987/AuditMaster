@@ -14,8 +14,7 @@ import styles from './AuditListView.module.scss';
 import {
   IAuditMasterItem,
   ICurrentUser,
-  AuditStatus,
-  AuditPriority
+  AuditStatus
 } from '../../models';
 import { SharePointService, RoleService } from '../../services';
 
@@ -89,7 +88,8 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
         currentPage: 1
       }));
     } catch (err) {
-      setState(prev => ({ ...prev, isLoading: false, error: err.message }));
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load audit items.';
+      setState(prev => ({ ...prev, isLoading: false, error: errorMessage }));
     }
   };
 
@@ -100,16 +100,11 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
       const q = state.searchText.toLowerCase();
       result = result.filter(i =>
         (i.Title && i.Title.toLowerCase().indexOf(q) >= 0) ||
-        (i.AuditId && i.AuditId.toLowerCase().indexOf(q) >= 0) ||
-        (i.Finding && i.Finding.toLowerCase().indexOf(q) >= 0) ||
-        (i.Department && i.Department.toLowerCase().indexOf(q) >= 0)
+        (i.Segment && i.Segment.toLowerCase().indexOf(q) >= 0)
       );
     }
     if (state.statusFilter) {
       result = result.filter(i => i.Status === state.statusFilter);
-    }
-    if (state.priorityFilter) {
-      result = result.filter(i => i.Priority === state.priorityFilter);
     }
     setState(prev => ({ ...prev, filteredItems: result, currentPage: 1 }));
   }, [state.searchText, state.statusFilter, state.priorityFilter, state.items]);
@@ -138,15 +133,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
     }
   };
 
-  const priorityClass = (priority: string): string => {
-    switch (priority) {
-      case AuditPriority.Critical: return styles.critical;
-      case AuditPriority.High: return styles.high;
-      case AuditPriority.Medium: return styles.medium;
-      case AuditPriority.Low: return styles.low;
-      default: return '';
-    }
-  };
+
 
   const viewTitle = (): string => {
     switch (viewMode) {
@@ -232,7 +219,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
           selectedKey={state.statusFilter || undefined}
           options={[
             { key: '', text: 'All Statuses' },
-            ...Object.values(AuditStatus).map(s => ({ key: s, text: s }))
+            ...Object.values(AuditStatus).map(s => ({ key: s as string, text: s as string }))
           ]}
           onChange={(_, opt) => setState(prev => ({
             ...prev,
@@ -240,19 +227,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
           }))}
           styles={{ dropdown: { width: 180 } }}
         />
-        <Dropdown
-          placeholder="Filter by Priority"
-          selectedKey={state.priorityFilter || undefined}
-          options={[
-            { key: '', text: 'All Priorities' },
-            ...Object.values(AuditPriority).map(p => ({ key: p, text: p }))
-          ]}
-          onChange={(_, opt) => setState(prev => ({
-            ...prev,
-            priorityFilter: (opt?.key as string) || ''
-          }))}
-          styles={{ dropdown: { width: 160 } }}
-        />
+       
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────── */}
@@ -276,9 +251,9 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
                 <th>Audit ID</th>
                 <th>Title</th>
                 <th>Status</th>
-                <th>Priority</th>
                 <th>PIC</th>
-                <th>Department</th>
+                <th>Service</th>
+                <th>Segment</th>
                 <th>Audit Date</th>
                 <th>Due Date</th>
                 <th>Actions</th>
@@ -287,22 +262,16 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
             <tbody>
               {pageItems.map(item => (
                 <tr key={item.Id} onClick={() => onEditItem(item)}>
-                  <td><strong>{item.AuditId}</strong></td>
+                  <td><strong>{item.Id}</strong></td>
                   <td title={item.Title}>{item.Title}</td>
                   <td>
                     <span className={`${styles.statusBadge} ${statusClass(item.Status)}`}>
                       {item.Status}
                     </span>
                   </td>
-                  <td>
-                    {item.Priority && (
-                      <span className={`${styles.priorityBadge} ${priorityClass(item.Priority)}`}>
-                        {item.Priority}
-                      </span>
-                    )}
-                  </td>
                   <td>{item.PIC ? item.PIC.Title : '–'}</td>
-                  <td>{item.Department || '–'}</td>
+                  <td>{item.Service || '–'}</td>
+                  <td>{item.Segment || '–'}</td>
                   <td>{formatDate(item.AuditDate)}</td>
                   <td>{formatDate(item.DueDate)}</td>
                   <td>

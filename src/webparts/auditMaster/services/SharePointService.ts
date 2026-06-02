@@ -332,11 +332,6 @@ export class SharePointService {
       if ((item as any)[f] !== undefined) payload[f] = (item as any)[f];
     }
 
-    // Number fields
-    if (item.ExtensionCount !== undefined) payload.ExtensionCount = item.ExtensionCount;
-
-    // Boolean fields
-    if (item.RequiresFollowUp !== undefined) payload.RequiresFollowUp = item.RequiresFollowUp;
 
     return payload;
   }

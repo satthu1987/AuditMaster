@@ -22,11 +22,12 @@ import {
   ICurrentUser,
   IValidationErrors,
   AuditStatus,
-  AuditPriority,
-  AuditType,
-  AuditSource,
+  FindingType,
   VerificationResult,
-  RiskRating
+  InternalExternal,
+  ActionStatus,
+  QLVerification,
+  RegionChoices
 } from '../../models';
 import { SharePointService, RoleService } from '../../services';
 
@@ -54,14 +55,16 @@ interface IFormState {
 
 /**
  * Full Audit Master item form – used for both Create and Edit.
+ * Matches the exact 34-field structure from the SharePoint list.
  *
  * Sections:
- *  1. Basic Information (Title, AuditId, AuditYear, AuditType, Source)
- *  2. Classification (Category, ISO Clause, Segment/Service, Department, Location)
- *  3. People (PIC, Verifier, Auditor, Auditee)
- *  4. Finding Details (Finding, RootCause, CorrectiveAction, PreventiveAction)
- *  5. Dates & Status (Status, Priority, RiskRating, dates)
- *  6. Verification & Follow-up
+ *  1. Basic Information (Title, FindingType, Region, Internal/External, PIONumber)
+ *  2. Classification (ISO clause, Finding ISO Chapter, Service, Category)
+ *  3. People (PIC, Quality Manager, Auditor, Verified by)
+ *  4. Finding Details (Finding Description, Root Cause, Quick fix, Action Taken)
+ *  5. Dates & Status (Status, Action Status, dates, Required RCA)
+ *  6. Verification & Links (Verification Result, Q&L verification, Evidence, Confluence Page)
+ *  7. Calculated / Dependent Fields (read-only)
  */
 const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   const { spService, roleService, currentUser, editItem, onSaved, onCancel } = props;
@@ -71,11 +74,10 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   const [state, setState] = React.useState<IFormState>({
     formData: editItem ? { ...editItem } : {
       Status: AuditStatus.Open,
-      Priority: AuditPriority.Medium,
-      VerificationResult: VerificationResult.NotVerified,
-      RiskRating: RiskRating.Medium,
-      ExtensionCount: 0,
-      RequiresFollowUp: false
+      VerificationResult: VerificationResult.No,
+      ActionStatus: ActionStatus.Onprogress,
+      QLVerification: QLVerification.No,
+      RequiredRCA: false
     },
     categories: [],
     isoClauses: [],
@@ -115,10 +117,11 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           isReadOnly: readOnly
         }));
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save audit item.';
         setState(prev => ({
           ...prev,
           isLoading: false,
-          errorMessage: `Failed to load form data: ${err.message}`
+          errorMessage: `Failed to load form data: ${errorMessage}`
         }));
       }
     };
@@ -150,7 +153,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     text: `${c.ISOClause}${c.Article ? ' – ' + c.Article : ''}`
   }));
 
-  const segmentOptions: IDropdownOption[] = state.segmentServices.map(s => ({
+  const segmentServiceOptions: IDropdownOption[] = state.segmentServices.map(s => ({
     key: s.Id,
     text: `${s.Title} – ${s.Service}`
   }));
@@ -164,20 +167,11 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     if (!fd.Title || fd.Title.trim() === '') {
       errs.Title = 'Title is required.';
     }
-    if (!fd.AuditId || fd.AuditId.trim() === '') {
-      errs.AuditId = 'Audit ID is required.';
-    }
     if (!fd.Status) {
       errs.Status = 'Status is required.';
     }
-    if (!fd.AuditDate) {
-      errs.AuditDate = 'Audit Date is required.';
-    }
-    if (fd.DueDate && fd.AuditDate && new Date(fd.DueDate) < new Date(fd.AuditDate)) {
-      errs.DueDate = 'Due Date cannot be before Audit Date.';
-    }
-    if (!fd.Finding || fd.Finding.trim() === '') {
-      errs.Finding = 'Finding is required.';
+    if (!fd.FindingDescription || fd.FindingDescription.trim() === '') {
+      errs.FindingDescription = 'Finding Description is required.';
     }
 
     return errs;
@@ -203,12 +197,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           successMessage: 'Audit item updated successfully!'
         }));
       } else {
-        // Set created by user
-        const payload = {
-          ...state.formData,
-          CreatedByUserId: currentUser.id
-        };
-        await spService.createAuditItem(payload);
+        await spService.createAuditItem(state.formData);
         setState(prev => ({
           ...prev,
           isSaving: false,
@@ -216,13 +205,13 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         }));
       }
 
-      // Notify parent after short delay so user can see success message
       setTimeout(() => onSaved(), 1200);
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save audit item.';
       setState(prev => ({
         ...prev,
         isSaving: false,
-        errorMessage: `Save failed: ${err.message}`
+        errorMessage
       }));
     }
   };
@@ -244,7 +233,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   return (
     <div className={styles.formContainer}>
       <div className={styles.formTitle}>
-        {isEditMode ? `Edit Audit Item – ${fd.AuditId || ''}` : 'Create New Audit Item'}
+        {isEditMode ? `Edit Audit Item – ${fd.Title || ''}` : 'Create New Audit Item'}
       </div>
       <div className={styles.formSubtitle}>
         {isEditMode
@@ -271,7 +260,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
       {/* ── Section 1: Basic Information ──────────────────────────────── */}
       <div className={styles.section}>
         <h4>Basic Information</h4>
-        <div className={styles.fieldRow}>
+        <div className={styles.fieldFull}>
           <div>
             <TextField
               label="Title"
@@ -282,72 +271,110 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               errorMessage={errs.Title}
             />
           </div>
-          <div>
-            <TextField
-              label="Audit ID"
-              required
-              disabled={ro}
-              value={fd.AuditId || ''}
-              onChange={(_, v) => updateField('AuditId', v)}
-              errorMessage={errs.AuditId}
-            />
-          </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
             <TextField
-              label="Audit Year"
+              label="PIONumber"
               disabled={ro}
-              value={fd.AuditYear || ''}
-              onChange={(_, v) => updateField('AuditYear', v)}
-              placeholder="e.g. 2026"
+              value={fd.PIONumber || ''}
+              onChange={(_, v) => updateField('PIONumber', v)}
+              placeholder="e.g. PIO-2026-001"
             />
           </div>
           <div>
             <Dropdown
-              label="Audit Type"
+              label="Finding Type"
               disabled={ro}
-              selectedKey={fd.AuditType || undefined}
-              options={toDropdownOptions(Object.values(AuditType))}
-              onChange={(_, opt) => updateField('AuditType', opt?.key)}
+              selectedKey={fd.FindingType || undefined}
+              options={toDropdownOptions(Object.values(FindingType))}
+              onChange={(_, opt) => updateField('FindingType', opt?.key)}
             />
           </div>
           <div>
             <Dropdown
-              label="Source"
+              label="Region"
               disabled={ro}
-              selectedKey={fd.Source || undefined}
-              options={toDropdownOptions(Object.values(AuditSource))}
-              onChange={(_, opt) => updateField('Source', opt?.key)}
+              selectedKey={fd.Region || undefined}
+              options={toDropdownOptions(RegionChoices)}
+              onChange={(_, opt) => updateField('Region', opt?.key)}
+            />
+          </div>
+          <div>
+            <Dropdown
+              label="Internal / External"
+              disabled={ro}
+              selectedKey={fd.InternalExternal || undefined}
+              options={toDropdownOptions(Object.values(InternalExternal))}
+              onChange={(_, opt) => updateField('InternalExternal', opt?.key)}
             />
           </div>
         </div>
         <div className={styles.fieldFull}>
           <TextField
-            label="Description"
+            label="Finding Description"
+            required
             multiline
-            rows={3}
+            rows={4}
             disabled={ro}
-            value={fd.Description || ''}
-            onChange={(_, v) => updateField('Description', v)}
+            value={fd.FindingDescription || ''}
+            onChange={(_, v) => updateField('FindingDescription', v)}
+            errorMessage={errs.FindingDescription}
           />
         </div>
       </div>
 
-      {/* ── Section 2: Classification ─────────────────────────────────── */}
+      {/* ── Section 4: Finding Details ────────────────────────────────── */}
+      <div className={styles.section}>
+        <h4>Finding Details</h4>
+        <div className={styles.fieldFull}>
+          <TextField
+            label="RC Description (Root Cause)"
+            multiline
+            rows={3}
+            disabled={ro}
+            value={fd.RCDescription || ''}
+            onChange={(_, v) => updateField('RCDescription', v)}
+          />
+        </div>
+        <div className={styles.fieldRow}>
+          <div>
+            <TextField
+              label="Quick Fix"
+              multiline
+              rows={3}
+              disabled={ro}
+              value={fd.QuickFix || ''}
+              onChange={(_, v) => updateField('QuickFix', v)}
+            />
+          </div>
+          <div>
+            <TextField
+              label="Action Taken"
+              multiline
+              rows={3}
+              disabled={ro}
+              value={fd.ActionTaken || ''}
+              onChange={(_, v) => updateField('ActionTaken', v)}
+            />
+          </div>
+        </div>
+        <div className={styles.fieldRow}>
+          <div>
+            <Toggle
+              label="Required RCA"
+              disabled={ro}
+              checked={!!fd.RequiredRCA}
+              onChange={(_, checked) => updateField('RequiredRCA', checked)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Section 2: Classification (Lookups) ──────────────────────── */}
       <div className={styles.section}>
         <h4>Classification</h4>
         <div className={styles.fieldRow}>
-          <div>
-            <Dropdown
-              label="Category"
-              disabled={ro}
-              selectedKey={fd.CategoryId || undefined}
-              options={categoryOptions}
-              onChange={(_, opt) => updateField('CategoryId', opt?.key)}
-              placeholder="Select category"
-            />
-          </div>
           <div>
             <Dropdown
               label="ISO Clause"
@@ -358,35 +385,56 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               placeholder="Select ISO clause"
             />
           </div>
+          <div>
+            <Dropdown
+              label="Finding ISO Chapter"
+              disabled={ro}
+              selectedKey={fd.FindingISOChapterId || undefined}
+              options={isoClauseOptions}
+              onChange={(_, opt) => updateField('FindingISOChapterId', opt?.key)}
+              placeholder="Select finding ISO chapter"
+            />
+          </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
             <Dropdown
-              label="Segment / Service"
+              label="Service"
               disabled={ro}
-              selectedKey={fd.SegmentServiceId || undefined}
-              options={segmentOptions}
-              onChange={(_, opt) => updateField('SegmentServiceId', opt?.key)}
-              placeholder="Select segment"
+              selectedKey={fd.ServiceId || undefined}
+              options={segmentServiceOptions}
+              onChange={(_, opt) => updateField('ServiceId', opt?.key)}
+              placeholder="Select service (auto-fills Segment &amp; Division)"
             />
           </div>
           <div>
-            <TextField
-              label="Department"
+            <Dropdown
+              label="Category"
               disabled={ro}
-              value={fd.Department || ''}
-              onChange={(_, v) => updateField('Department', v)}
-            />
-          </div>
-          <div>
-            <TextField
-              label="Location"
-              disabled={ro}
-              value={fd.Location || ''}
-              onChange={(_, v) => updateField('Location', v)}
+              selectedKey={fd.CategoryId || undefined}
+              options={categoryOptions}
+              onChange={(_, opt) => updateField('CategoryId', opt?.key)}
+              placeholder="Select category"
             />
           </div>
         </div>
+        {/* Dependent lookup values (read-only) */}
+        {isEditMode && (
+          <div className={styles.fieldRow}>
+            <div>
+              <Label>Segment (auto)</Label>
+              <span>{fd.Segment || '–'}</span>
+            </div>
+            <div>
+              <Label>Article (auto)</Label>
+              <span>{fd.Article || '–'}</span>
+            </div>
+            <div>
+              <Label>Division (auto)</Label>
+              <span>{fd.Service_Division || '–'}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Section 3: People ─────────────────────────────────────────── */}
@@ -399,17 +447,16 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               disabled={ro}
               value={fd.PICId ? String(fd.PICId) : ''}
               onChange={(_, v) => updateField('PICId', v ? parseInt(v, 10) : undefined)}
-              description="Enter the SharePoint User ID of the Person In Charge"
+              description="SharePoint User ID of the Person In Charge"
               type="number"
             />
           </div>
           <div>
             <TextField
-              label="Verifier (User ID)"
+              label="Quality Manager (User ID)"
               disabled={ro}
-              value={fd.VerifierId ? String(fd.VerifierId) : ''}
-              onChange={(_, v) => updateField('VerifierId', v ? parseInt(v, 10) : undefined)}
-              description="Enter the SharePoint User ID of the Verifier"
+              value={fd.QualityManagerId ? String(fd.QualityManagerId) : ''}
+              onChange={(_, v) => updateField('QualityManagerId', v ? parseInt(v, 10) : undefined)}
               type="number"
             />
           </div>
@@ -426,82 +473,13 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           </div>
           <div>
             <TextField
-              label="Auditee (User ID)"
+              label="Verified by (User ID)"
               disabled={ro}
-              value={fd.AuditeeId ? String(fd.AuditeeId) : ''}
-              onChange={(_, v) => updateField('AuditeeId', v ? parseInt(v, 10) : undefined)}
+              value={fd.VerifiedById ? String(fd.VerifiedById) : ''}
+              onChange={(_, v) => updateField('VerifiedById', v ? parseInt(v, 10) : undefined)}
               type="number"
             />
           </div>
-        </div>
-      </div>
-
-      {/* ── Section 4: Finding Details ────────────────────────────────── */}
-      <div className={styles.section}>
-        <h4>Finding Details</h4>
-        <div className={styles.fieldFull}>
-          <TextField
-            label="Finding"
-            required
-            multiline
-            rows={3}
-            disabled={ro}
-            value={fd.Finding || ''}
-            onChange={(_, v) => updateField('Finding', v)}
-            errorMessage={errs.Finding}
-          />
-        </div>
-        <div className={styles.fieldFull}>
-          <TextField
-            label="Root Cause"
-            multiline
-            rows={3}
-            disabled={ro}
-            value={fd.RootCause || ''}
-            onChange={(_, v) => updateField('RootCause', v)}
-          />
-        </div>
-        <div className={styles.fieldRow}>
-          <div>
-            <TextField
-              label="Corrective Action"
-              multiline
-              rows={3}
-              disabled={ro}
-              value={fd.CorrectiveAction || ''}
-              onChange={(_, v) => updateField('CorrectiveAction', v)}
-            />
-          </div>
-          <div>
-            <TextField
-              label="Preventive Action"
-              multiline
-              rows={3}
-              disabled={ro}
-              value={fd.PreventiveAction || ''}
-              onChange={(_, v) => updateField('PreventiveAction', v)}
-            />
-          </div>
-        </div>
-        <div className={styles.fieldFull}>
-          <TextField
-            label="Action Plan"
-            multiline
-            rows={3}
-            disabled={ro}
-            value={fd.ActionPlan || ''}
-            onChange={(_, v) => updateField('ActionPlan', v)}
-          />
-        </div>
-        <div className={styles.fieldFull}>
-          <TextField
-            label="Evidence"
-            multiline
-            rows={2}
-            disabled={ro}
-            value={fd.Evidence || ''}
-            onChange={(_, v) => updateField('Evidence', v)}
-          />
         </div>
       </div>
 
@@ -522,20 +500,11 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           </div>
           <div>
             <Dropdown
-              label="Priority"
+              label="Action Status"
               disabled={ro}
-              selectedKey={fd.Priority || undefined}
-              options={toDropdownOptions(Object.values(AuditPriority))}
-              onChange={(_, opt) => updateField('Priority', opt?.key)}
-            />
-          </div>
-          <div>
-            <Dropdown
-              label="Risk Rating"
-              disabled={ro}
-              selectedKey={fd.RiskRating || undefined}
-              options={toDropdownOptions(Object.values(RiskRating))}
-              onChange={(_, opt) => updateField('RiskRating', opt?.key)}
+              selectedKey={fd.ActionStatus || undefined}
+              options={toDropdownOptions(Object.values(ActionStatus))}
+              onChange={(_, opt) => updateField('ActionStatus', opt?.key)}
             />
           </div>
         </div>
@@ -543,13 +512,11 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <DatePicker
               label="Audit Date"
-              isRequired
               disabled={ro}
               value={fd.AuditDate ? new Date(fd.AuditDate) : undefined}
               onSelectDate={(date) => updateField('AuditDate', date ? date.toISOString() : '')}
               placeholder="Select audit date"
             />
-            {errs.AuditDate && <span className={styles.errorText}>{errs.AuditDate}</span>}
           </div>
           <div>
             <DatePicker
@@ -559,42 +526,21 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               onSelectDate={(date) => updateField('DueDate', date ? date.toISOString() : '')}
               placeholder="Select due date"
             />
-            {errs.DueDate && <span className={styles.errorText}>{errs.DueDate}</span>}
           </div>
           <div>
             <DatePicker
-              label="Target Close Date"
+              label="Closed Date"
               disabled={ro}
-              value={fd.TargetCloseDate ? new Date(fd.TargetCloseDate) : undefined}
-              onSelectDate={(date) => updateField('TargetCloseDate', date ? date.toISOString() : '')}
-              placeholder="Select target close date"
-            />
-          </div>
-        </div>
-        <div className={styles.fieldRow}>
-          <div>
-            <DatePicker
-              label="Completion Date"
-              disabled={ro}
-              value={fd.CompletionDate ? new Date(fd.CompletionDate) : undefined}
-              onSelectDate={(date) => updateField('CompletionDate', date ? date.toISOString() : '')}
-            />
-          </div>
-          <div>
-            <TextField
-              label="Extension Count"
-              type="number"
-              disabled={ro}
-              value={fd.ExtensionCount !== undefined ? String(fd.ExtensionCount) : '0'}
-              onChange={(_, v) => updateField('ExtensionCount', v ? parseInt(v, 10) : 0)}
+              value={fd.ClosedDate ? new Date(fd.ClosedDate) : undefined}
+              onSelectDate={(date) => updateField('ClosedDate', date ? date.toISOString() : '')}
             />
           </div>
         </div>
       </div>
 
-      {/* ── Section 6: Verification & Follow-up ──────────────────────── */}
+      {/* ── Section 6: Verification & Links ───────────────────────────── */}
       <div className={styles.section}>
-        <h4>Verification &amp; Follow-up</h4>
+        <h4>Verification &amp; Links</h4>
         <div className={styles.fieldRow}>
           <div>
             <Dropdown
@@ -606,6 +552,17 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
             />
           </div>
           <div>
+            <Dropdown
+              label="Q&amp;L Verification"
+              disabled={ro}
+              selectedKey={fd.QLVerification || undefined}
+              options={toDropdownOptions(Object.values(QLVerification))}
+              onChange={(_, opt) => updateField('QLVerification', opt?.key)}
+            />
+          </div>
+        </div>
+        <div className={styles.fieldRow}>
+          <div>
             <DatePicker
               label="Verification Date"
               disabled={ro}
@@ -616,48 +573,42 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <Toggle
-              label="Requires Follow-up"
+            <TextField
+              label="Evidence (link) – URL"
               disabled={ro}
-              checked={!!fd.RequiresFollowUp}
-              onChange={(_, checked) => updateField('RequiresFollowUp', checked)}
+              value={fd.EvidenceLink?.Url || ''}
+              onChange={(_, v) => updateField('EvidenceLink', { Url: v || '', Description: v || '' })}
+              placeholder="https://..."
+            />
+          </div>
+          <div>
+            <TextField
+              label="Confluence Page – URL"
+              disabled={ro}
+              value={fd.ConfluencePage?.Url || ''}
+              onChange={(_, v) => updateField('ConfluencePage', { Url: v || '', Description: v || '' })}
+              placeholder="https://..."
             />
           </div>
         </div>
-        <div className={styles.fieldFull}>
-          <TextField
-            label="Follow-up Notes"
-            multiline
-            rows={3}
-            disabled={ro}
-            value={fd.FollowUpNotes || ''}
-            onChange={(_, v) => updateField('FollowUpNotes', v)}
-          />
-        </div>
-        <div className={styles.fieldFull}>
-          <TextField
-            label="Remarks"
-            multiline
-            rows={2}
-            disabled={ro}
-            value={fd.Remarks || ''}
-            onChange={(_, v) => updateField('Remarks', v)}
-          />
-        </div>
       </div>
 
-      {/* ── Read-only calculated fields (edit mode only) ─────────────── */}
+      {/* ── Section 7: Calculated & Dependent Fields (read-only, edit mode) ─ */}
       {isEditMode && (
         <div className={styles.section}>
           <h4>Calculated Fields (Read-only)</h4>
           <div className={styles.fieldRow}>
             <div>
-              <Label>Days Open</Label>
-              <span>{fd.DaysOpen ?? 'N/A'}</span>
+              <Label>Year</Label>
+              <span>{fd.Year || 'N/A'}</span>
             </div>
             <div>
-              <Label>Is Overdue</Label>
-              <span>{fd.IsOverdue ? 'Yes' : 'No'}</span>
+              <Label>Finding Number</Label>
+              <span>{fd.FindingNumber || 'N/A'}</span>
+            </div>
+            <div>
+              <Label>Verification Date (Calculated)</Label>
+              <span>{fd.VerificationDateCalculated || 'N/A'}</span>
             </div>
           </div>
         </div>
