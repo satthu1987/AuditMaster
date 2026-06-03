@@ -412,15 +412,6 @@ export class SharePointService {
    */
   public async createAuditItem(item: Partial<IAuditMasterItem>): Promise<IAuditMasterItem> {
     const payload: any = { ...item };
-    const fieldMap = await this._getAuditFieldMap();
-
-    if (payload.ISOChapterId !== undefined && payload.ISOChapterId !== null && payload.ISOChapterId !== '') {
-      if (fieldMap.ISOChapter) {
-        payload[`${fieldMap.ISOChapter.internalName}Id`] = Number(payload.ISOChapterId);
-      }
-      delete payload.ISOChapterId;
-    }
-
 
     const currentUserId = await this.getCurrentUserId();
     payload.CreatedByUserId = currentUserId;
@@ -451,15 +442,6 @@ export class SharePointService {
    */
   public async updateAuditItem(itemId: number, item: Partial<IAuditMasterItem>): Promise<void> {
     const payload: any = { ...item };
-    const fieldMap = await this._getAuditFieldMap();
-
-    if (payload.ISOChapterId !== undefined && payload.ISOChapterId !== null && payload.ISOChapterId !== '') {
-      if (fieldMap.ISOChapter) {
-        payload[`${fieldMap.ISOChapter.internalName}Id`] = Number(payload.ISOChapterId);
-      }
-      delete payload.ISOChapterId;
-    }
-
 
     const currentUserId = await this.getCurrentUserId();
     payload.CreatedByUserId = currentUserId;
