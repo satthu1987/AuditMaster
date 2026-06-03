@@ -64,5 +64,9 @@ export const AUDIT_FIELD_CONFIG: IFieldDefinition[] = [
             'Text'
         ],
         includeInSelect: true
+    }, {
+        key: 'CreatedByUser',
+        aliases: ['createdbyuser'],
+        types: ['User']
     }
 ];

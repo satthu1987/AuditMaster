@@ -407,11 +407,59 @@ export class SharePointService {
   //  Audit Master List – CREATE / UPDATE
   // ═══════════════════════════════════════════════════════════════════════════
 
+  private _toPositiveId(value: unknown): number | undefined {
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+
+    if (typeof value === 'string' && value.trim() === '') {
+      return undefined;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return undefined;
+    }
+
+    return Math.floor(parsed);
+  }
+
+  private async _toAuditWritePayload(item: Partial<IAuditMasterItem>): Promise<any> {
+    const payload: any = { ...item };
+
+    const userFieldTargets = AUDIT_FIELD_CONFIG
+      .filter(config =>
+        config.types.some(t =>
+          ['User', 'UserMulti'].includes(t)
+        )
+      )
+      .map(config => ({
+        name: config.key,
+        target: `${config.key}Id`
+      }));
+
+    userFieldTargets.forEach((field) => {
+      const objectValue = (payload as any)[field.name];
+      const explicitId = (payload as any)[field.target];
+      const idCandidate = explicitId ?? objectValue?.Id;
+      const idValue = this._toPositiveId(idCandidate);
+
+      delete (payload as any)[field.name];
+      if (idValue !== undefined) {
+        (payload as any)[field.target] = idValue;
+      } else {
+        delete (payload as any)[field.target];
+      }
+    });
+
+    return payload;
+  }
+
   /**
    * Create a new Audit Master item. Returns the created item.
    */
   public async createAuditItem(item: Partial<IAuditMasterItem>): Promise<IAuditMasterItem> {
-    const payload: any = { ...item };
+    const payload: any = await this._toAuditWritePayload(item);
 
     const currentUserId = await this.getCurrentUserId();
     payload.CreatedByUserId = currentUserId;
@@ -441,8 +489,7 @@ export class SharePointService {
    * Update an existing Audit Master item.
    */
   public async updateAuditItem(itemId: number, item: Partial<IAuditMasterItem>): Promise<void> {
-    const payload: any = { ...item };
-
+    const payload: any = await this._toAuditWritePayload(item);
     const currentUserId = await this.getCurrentUserId();
     payload.CreatedByUserId = currentUserId;
     const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${itemId})`;
