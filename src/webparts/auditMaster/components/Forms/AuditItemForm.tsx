@@ -21,13 +21,14 @@ import {
   ISegmentServiceItem,
   ICurrentUser,
   IValidationErrors,
+  IUserRoleItem,
   AuditStatus,
   FindingType,
+  AuditType,
   VerificationResult,
   InternalExternal,
-  ActionStatus,
-  QLVerification,
-  RegionChoices
+  RegionChoices,
+  QLVerification
 } from '../../models';
 import { SharePointService, RoleService } from '../../services';
 
@@ -45,6 +46,8 @@ interface IFormState {
   categories: ICategoryItem[];
   isoClauses: IISOClauseItem[];
   segmentServices: ISegmentServiceItem[];
+  userRoles: IUserRoleItem[];
+  usersById: { [id: number]: { Id: number; Title: string; Email: string } };
   errors: IValidationErrors;
   isSaving: boolean;
   isLoading: boolean;
@@ -59,7 +62,7 @@ interface IFormState {
  *
  * Sections:
  *  1. Basic Information (Title, FindingType, Region, Internal/External, PIONumber)
- *  2. Classification (ISO clause, Finding ISO Chapter, Service, Category)
+ *  2. Classification (ISO clause, Service, Category)
  *  3. People (PIC, Quality Manager, Auditor, Verified by)
  *  4. Finding Details (Finding Description, Root Cause, Quick fix, Action Taken)
  *  5. Dates & Status (Status, Action Status, dates, Required RCA)
@@ -75,13 +78,14 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     formData: editItem ? { ...editItem } : {
       Status: AuditStatus.Open,
       VerificationResult: VerificationResult.No,
-      ActionStatus: ActionStatus.Onprogress,
       QLVerification: QLVerification.No,
       RequiredRCA: false
     },
     categories: [],
     isoClauses: [],
     segmentServices: [],
+    userRoles: [],
+    usersById: {},
     errors: {},
     isSaving: false,
     isLoading: true,
@@ -94,11 +98,26 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   React.useEffect(() => {
     const loadData = async (): Promise<void> => {
       try {
-        const [categories, isoClauses, segmentServices] = await Promise.all([
+        const [categories, isoClauses, segmentServices, userRoles] = await Promise.all([
           spService.getCategories(),
           spService.getISOClauses(),
-          spService.getSegmentServices()
+          spService.getSegmentServices(),
+          spService.getUserRoles()
         ]);
+
+        const roleUserIds = Array.from(
+          new Set(
+            userRoles
+              .filter(r => r.AccountId)
+              .map(r => r.AccountId)
+          )
+        );
+
+        const users = await spService.getUsersByIds(roleUserIds);
+        const usersById = users.reduce((acc, user) => {
+          acc[user.Id] = user;
+          return acc;
+        }, {} as { [id: number]: { Id: number; Title: string; Email: string } });
 
         // Permission check
         let readOnly = false;
@@ -113,6 +132,8 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           categories,
           isoClauses,
           segmentServices,
+          userRoles,
+          usersById,
           isLoading: false,
           isReadOnly: readOnly
         }));
@@ -126,6 +147,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
       }
     };
     loadData();
+    console.log('AuditItemForm mounted with editItem:', state);
   }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -153,11 +175,55 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     text: `${c.ISOClause}${c.Article ? ' – ' + c.Article : ''}`
   }));
 
-  const segmentServiceOptions: IDropdownOption[] = state.segmentServices.map(s => ({
-    key: s.Id,
-    text: `${s.Title} – ${s.Service}`
+  const isoChapterOptions: IDropdownOption[] = Array.from(
+    new Map(
+      state.isoClauses.map(c => [c.ISOlevel1 || c.ISOClause, c] as const)
+    ).entries()
+  ).map(([, c]) => ({
+    key: c.Id,
+    text: c.ISOlevel1 || c.ISOClause
   }));
 
+  const segmentOptions: IDropdownOption[] = Array.from(
+    new Set(state.segmentServices.map(s => s.Title).filter(Boolean))
+  ).map(segment => ({
+    key: segment,
+    text: segment
+  }));
+
+  const serviceOptions: IDropdownOption[] = state.segmentServices
+    .filter(s => !state.formData.Segment || s.Title === state.formData.Segment)
+    .map(s => ({
+      key: s.Service || s.Title,
+      text: s.Service || s.Title
+    }));
+
+  const getUserRoleOptions = (allowedRoles: string[]): IDropdownOption[] => Array.from(
+    new Map(
+      state.userRoles
+        .filter(r => r.AccountId && allowedRoles.indexOf(String(r.Role)) !== -1)
+        .map(r => [r.AccountId, r] as const)
+    ).values()
+  ).map(r => {
+    const user = state.usersById[r.AccountId];
+    const accountLabel = r.AccountStringId && r.AccountStringId.indexOf('|') !== -1
+      ? r.AccountStringId.split('|').pop()
+      : r.AccountStringId;
+
+    const text = user
+      ? `${user.Title}${user.Email ? ` (${user.Email})` : ''}`
+      : (accountLabel || `User ${r.AccountId}`);
+
+    return {
+      key: r.AccountId,
+      text
+    };
+  });
+
+  const picOptions: IDropdownOption[] = getUserRoleOptions(['PIC', 'Admin']);
+  const qualityManagerOptions: IDropdownOption[] = getUserRoleOptions(['Manager', 'Admin']);
+  const verifierOptions: IDropdownOption[] = getUserRoleOptions(['Verifier', 'Admin']);
+  const auditorOptions: IDropdownOption[] = getUserRoleOptions(['Auditor', 'Admin']);
   // ── Validation ────────────────────────────────────────────────────────────
 
   const validate = (): IValidationErrors => {
@@ -285,6 +351,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <Dropdown
               label="Finding Type"
+              required
               disabled={ro}
               selectedKey={fd.FindingType || undefined}
               options={toDropdownOptions(Object.values(FindingType))}
@@ -309,6 +376,16 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               onChange={(_, opt) => updateField('InternalExternal', opt?.key)}
             />
           </div>
+          <div>
+            <Dropdown
+              label="Audit Type"
+              disabled={ro}
+              selectedKey={fd.AuditType || undefined}
+              options={toDropdownOptions(Object.values(AuditType))}
+              onChange={(_, opt) => updateField('AuditType', opt?.key)}
+              placeholder="Select audit type"
+            />
+          </div>
         </div>
         <div className={styles.fieldFull}>
           <TextField
@@ -317,7 +394,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
             multiline
             rows={4}
             disabled={ro}
-            value={fd.FindingDescription || ''}
+            value={fd.FindingDescription}
             onChange={(_, v) => updateField('FindingDescription', v)}
             errorMessage={errs.FindingDescription}
           />
@@ -378,6 +455,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <Dropdown
               label="ISO Clause"
+              required
               disabled={ro}
               selectedKey={fd.ISOClauseId || undefined}
               options={isoClauseOptions}
@@ -387,29 +465,49 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           </div>
           <div>
             <Dropdown
-              label="Finding ISO Chapter"
+              label="ISO Chapter"
               disabled={ro}
-              selectedKey={fd.FindingISOChapterId || undefined}
-              options={isoClauseOptions}
-              onChange={(_, opt) => updateField('FindingISOChapterId', opt?.key)}
-              placeholder="Select finding ISO chapter"
+              selectedKey={fd.ISOChapterId || undefined}
+              options={isoChapterOptions}
+              onChange={(_, opt) => updateField('ISOChapterId', opt ? Number(opt.key) : undefined)}
+              placeholder="Select ISO level 1"
             />
           </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
             <Dropdown
-              label="Service"
+              label="Segment"
+              required
               disabled={ro}
-              selectedKey={fd.ServiceId || undefined}
-              options={segmentServiceOptions}
-              onChange={(_, opt) => updateField('ServiceId', opt?.key)}
-              placeholder="Select service (auto-fills Segment &amp; Division)"
+              selectedKey={fd.Segment || undefined}
+              options={segmentOptions}
+              onChange={(_, opt) => {
+                updateField('Segment', opt?.key);
+                updateField('Service', undefined);
+              }}
+              placeholder="Select segment"
+            />
+          </div>
+          <div>
+            <Dropdown
+              label="Service"
+              required
+              disabled={ro || !fd.Segment}
+              selectedKey={fd.Service || undefined}
+              options={serviceOptions}
+              onChange={(_, opt) => {
+                const selected = state.segmentServices.find(s => (s.Service || s.Title) === String(opt?.key));
+                updateField('Service', opt?.key);
+                updateField('Segment', selected ? selected.Title : fd.Segment);
+              }}
+              placeholder={fd.Segment ? 'Select service' : 'Select segment first'}
             />
           </div>
           <div>
             <Dropdown
               label="Category"
+              required
               disabled={ro}
               selectedKey={fd.CategoryId || undefined}
               options={categoryOptions}
@@ -429,10 +527,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               <Label>Article (auto)</Label>
               <span>{fd.Article || '–'}</span>
             </div>
-            <div>
-              <Label>Division (auto)</Label>
-              <span>{fd.Service_Division || '–'}</span>
-            </div>
           </div>
         )}
       </div>
@@ -442,42 +536,47 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         <h4>People</h4>
         <div className={styles.fieldRow}>
           <div>
-            <TextField
-              label="PIC (User ID)"
+            <Dropdown
+              label="PIC"
+              required
               disabled={ro}
-              value={fd.PICId ? String(fd.PICId) : ''}
-              onChange={(_, v) => updateField('PICId', v ? parseInt(v, 10) : undefined)}
-              description="SharePoint User ID of the Person In Charge"
-              type="number"
+              selectedKey={fd.PICId || undefined}
+              options={picOptions}
+              onChange={(_, opt) => updateField('PICId', opt?.key)}
+              placeholder="Select PIC user or Admin"
             />
           </div>
           <div>
-            <TextField
-              label="Quality Manager (User ID)"
+            <Dropdown
+              label="Quality Manager"
               disabled={ro}
-              value={fd.QualityManagerId ? String(fd.QualityManagerId) : ''}
-              onChange={(_, v) => updateField('QualityManagerId', v ? parseInt(v, 10) : undefined)}
-              type="number"
+              selectedKey={fd.QualityManagerId || undefined}
+              options={qualityManagerOptions}
+              onChange={(_, opt) => updateField('QualityManagerId', opt?.key)}
+              placeholder="Select Manager or Admin"
             />
           </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <TextField
-              label="Auditor (User ID)"
+            <Dropdown
+              label="Auditor"
+              required
               disabled={ro}
-              value={fd.AuditorId ? String(fd.AuditorId) : ''}
-              onChange={(_, v) => updateField('AuditorId', v ? parseInt(v, 10) : undefined)}
-              type="number"
+              selectedKey={fd.AuditorId || undefined}
+              options={auditorOptions}
+              onChange={(_, opt) => updateField('AuditorId', opt?.key)}
+              placeholder="Select Auditor or Admin"
             />
           </div>
           <div>
-            <TextField
-              label="Verified by (User ID)"
+            <Dropdown
+              label="Verified by"
               disabled={ro}
-              value={fd.VerifiedById ? String(fd.VerifiedById) : ''}
-              onChange={(_, v) => updateField('VerifiedById', v ? parseInt(v, 10) : undefined)}
-              type="number"
+              selectedKey={fd.VerifierId || undefined}
+              options={verifierOptions}
+              onChange={(_, opt) => updateField('VerifierId', opt?.key)}
+              placeholder="Select Verifier or Admin"
             />
           </div>
         </div>
@@ -498,20 +597,12 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               errorMessage={errs.Status}
             />
           </div>
-          <div>
-            <Dropdown
-              label="Action Status"
-              disabled={ro}
-              selectedKey={fd.ActionStatus || undefined}
-              options={toDropdownOptions(Object.values(ActionStatus))}
-              onChange={(_, opt) => updateField('ActionStatus', opt?.key)}
-            />
-          </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
             <DatePicker
               label="Audit Date"
+              isRequired={true}
               disabled={ro}
               value={fd.AuditDate ? new Date(fd.AuditDate) : undefined}
               onSelectDate={(date) => updateField('AuditDate', date ? date.toISOString() : '')}
@@ -521,6 +612,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <DatePicker
               label="Due Date"
+              isRequired={true}
               disabled={ro}
               value={fd.DueDate ? new Date(fd.DueDate) : undefined}
               onSelectDate={(date) => updateField('DueDate', date ? date.toISOString() : '')}
@@ -553,10 +645,10 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           </div>
           <div>
             <Dropdown
-              label="Q&amp;L Verification"
+              label="Q&L Verification"
               disabled={ro}
               selectedKey={fd.QLVerification || undefined}
-              options={toDropdownOptions(Object.values(QLVerification))}
+              options={toDropdownOptions(Object.values(VerificationResult))}
               onChange={(_, opt) => updateField('QLVerification', opt?.key)}
             />
           </div>
@@ -601,10 +693,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
             <div>
               <Label>Year</Label>
               <span>{fd.Year || 'N/A'}</span>
-            </div>
-            <div>
-              <Label>Finding Number</Label>
-              <span>{fd.FindingNumber || 'N/A'}</span>
             </div>
             <div>
               <Label>Verification Date (Calculated)</Label>

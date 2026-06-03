@@ -22,6 +22,7 @@ interface IAppState {
   menuItems: IMenuItem[];
   selectedMenu: string;
   editItem: IAuditMasterItem | null;
+  createFormKey: number;
 }
 
 /**
@@ -56,7 +57,8 @@ const AuditMaster: React.FC<IAuditMasterProps> = (props) => {
     currentUser: null,
     menuItems: [],
     selectedMenu: '',
-    editItem: null
+    editItem: null,
+    createFormKey: 0
   });
 
   // ── Initialization ────────────────────────────────────────────────────────
@@ -87,7 +89,8 @@ const AuditMaster: React.FC<IAuditMasterProps> = (props) => {
         currentUser: user,
         menuItems,
         selectedMenu: defaultMenu,
-        editItem: null
+        editItem: null,
+        createFormKey: 0
       });
     } catch (err) {
       console.error('[AuditMaster] Initialization failed:', err);
@@ -101,7 +104,12 @@ const AuditMaster: React.FC<IAuditMasterProps> = (props) => {
 
   // ── Navigation handlers ───────────────────────────────────────────────────
   const handleMenuSelect = (key: string): void => {
-    setState(prev => ({ ...prev, selectedMenu: key, editItem: null }));
+    setState(prev => ({
+      ...prev,
+      selectedMenu: key,
+      editItem: null,
+      createFormKey: key === 'create' ? prev.createFormKey + 1 : prev.createFormKey
+    }));
   };
 
   const handleEditItem = (item: IAuditMasterItem): void => {
@@ -143,6 +151,7 @@ const AuditMaster: React.FC<IAuditMasterProps> = (props) => {
       case 'create':
         return (
           <AuditItemForm
+            key={`create-${state.createFormKey}`}
             spService={spService}
             roleService={roleService}
             currentUser={state.currentUser}

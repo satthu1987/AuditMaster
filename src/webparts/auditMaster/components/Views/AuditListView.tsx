@@ -227,7 +227,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
           }))}
           styles={{ dropdown: { width: 180 } }}
         />
-       
+
       </div>
 
       {/* ── Table ──────────────────────────────────────────────────────── */}
@@ -261,8 +261,8 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
             </thead>
             <tbody>
               {pageItems.map(item => (
-                <tr key={item.Id} onClick={() => onEditItem(item)}>
-                  <td><strong>{item.Id}</strong></td>
+                <tr key={item.AuditId} onClick={() => onEditItem(item)}>
+                  <td><strong>{item.AuditId}</strong></td>
                   <td title={item.Title}>{item.Title}</td>
                   <td>
                     <span className={`${styles.statusBadge} ${statusClass(item.Status)}`}>

@@ -76,7 +76,6 @@ export enum UserRole {
 // 15  DueDate                            Date and Time
 // 16  Verification Result                Choice
 // 17  Internal/External                  Choice
-// 18  Finding ISO Chapter                Lookup → ISOClause.ISOClause
 // 19  PIONumber                          Single line of text
 // 20  RC description                     Multiple lines of text
 // 21  Audit Date                         Date and Time
@@ -93,15 +92,14 @@ export enum UserRole {
 // 32  Service_Lookup                     Lookup (primary, → Segment_Service list)
 // 33  Service_Lookup: Division look up   Lookup (dependent from #32 → Division)
 // 34  VerificationDateCalculated         Calculated
-// 35  Action Status                      Choice
-// 36  Q&L verification                   Choice
+// 35  Q&L verification                   Yes/No
 
 export interface IAuditMasterItem {
   Id: number;
 
   // 1. Title – Single line of text
   Title: string;
-
+  AuditId?: string; // Custom field for formatted ID like "AUD-2024-0001"
   // 2. PIC – Person or Group
   PICId: number;
   PIC?: { Id: number; Title: string; EMail: string };
@@ -115,20 +113,26 @@ export interface IAuditMasterItem {
   // 5. Region – Choice
   Region: string;
 
+  // AuditType – Choice
+  AuditType?: AuditType;
+
   // 6. ISO clause – Lookup (primary, to ISOClause list → ISOClause field)
   ISOClauseId: number;
   ISOClause?: { Id: number; ISOClause: string };
 
-  // 7. Service – Lookup (primary, to Segment_Service list → Service field)
-  ServiceId: number;
-  Service?: { Id: number; Service: string };
-
-  // 8. Segment – Dependent lookup from Service → Segment_Service.Title
+  // 7. Service – Single line of text
+  Service?: string;
+  ServiceId?: number;
+  // 8. Segment – Single line of text
   Segment?: string;
 
   // 9. Quality Manager – Person or Group
   QualityManagerId: number;
   QualityManager?: { Id: number; Title: string; EMail: string };
+
+  // Verifier – Person or Group
+  VerifierId: number;
+  Verifier?: { Id: number; Title: string; EMail: string };
 
   // 10. Auditor – Person or Group
   AuditorId: number;
@@ -155,9 +159,9 @@ export interface IAuditMasterItem {
   // 17. Internal/External – Choice
   InternalExternal: InternalExternal;
 
-  // 18. Finding ISO Chapter – Lookup (to ISOClause list → ISOClause field)
-  FindingISOChapterId: number;
-  FindingISOChapter?: { Id: number; ISOClause: string };
+  // 18. ISO Chapter – Lookup (to ISOClause list)
+  ISOChapterId: number;
+  ISOChapter?: { Id: number; ISOClause: string; ISOlevel1?: string };
 
   // 19. PIONumber – Single line of text
   PIONumber: string;
@@ -181,9 +185,6 @@ export interface IAuditMasterItem {
   // 25. Year – Calculated (based on Audit Date)
   Year: string;
 
-  // 26. FindingNumber – Calculated
-  FindingNumber: string;
-
   // 27. Closed Date – Date and Time
   ClosedDate: string;
 
@@ -197,21 +198,16 @@ export interface IAuditMasterItem {
   // 31. Article – Dependent lookup from #30 (ISOClause for Article_lookup → Article)
   Article?: string;
 
-  // 33. Service_Lookup: Division look up – Dependent lookup from #32 (Service_Lookup → Division)
-  Service_Division?: string;
-
   // 34. VerificationDateCalculated – Calculated
   VerificationDateCalculated: string;
 
-  // 35. Action Status – Choice
-  ActionStatus: ActionStatus;
-
-  // 36. Q&L verification – Choice
+  // 35. Q&L verification – Choice (Yes/No)
   QLVerification: QLVerification;
 
   // SharePoint system fields
   Created: string;
   Modified: string;
+
 }
 
 // ─── Hyperlink or Picture field shape ────────────────────────────────────────
@@ -241,27 +237,24 @@ export enum VerificationResult {
   Yes = 'Yes',
   No = 'No'
 }
+export enum QLVerification {
+  Yes = 'Yes',
+  No = 'No'
+}
 
 export enum InternalExternal {
   Internal = 'Internal',
   External = 'External'
 }
 
-export enum ActionStatus {
-  Onprogress = 'On progress',
-  Completed = 'Completed',
-  ActionNotFilled = 'Action not filled',
-  NoAction = 'No action',
-  NeedVerification = 'Need verification',
-  Closed = 'Closed',
-  ProvideEvidence = 'Provide evidence'
-
+export enum AuditType {
+  Internal = 'Internal',
+  External = 'External',
+  Surveillance = 'Surveillance',
+  Certification = 'Certification',
+  Recertification = 'Recertification'
 }
 
-export enum QLVerification {
-  Yes = 'Yes',
-  No = 'No'
-}
 
 // ─── Region choices ──────────────────────────────────────────────────────────
 export const RegionChoices: string[] = [

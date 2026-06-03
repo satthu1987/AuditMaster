@@ -8,10 +8,9 @@ import {
   FindingType,
   VerificationResult,
   InternalExternal,
-  ActionStatus,
-  QLVerification,
   RegionChoices,
-  UserRole
+  UserRole,
+  QLVerification
 } from '../models';
 
 /**
@@ -232,17 +231,13 @@ export class ListProvisioningService {
       Object.values(InternalExternal),
       false
     );
-    // 33. Action Status
-    await this._addChoiceField(
-      listTitle, 'Action Status',
-      Object.values(ActionStatus),
-      false, ActionStatus.Onprogress
-    );
     // 34. Q&L verification
     await this._addChoiceField(
-      listTitle, 'Q&L verification',
+      listTitle,
+      'Q&L verification',
       Object.values(QLVerification),
-      false, QLVerification.No
+      false,
+      QLVerification.No
     );
 
     // ── Multiple lines of text fields ───────────────────────────────────────
