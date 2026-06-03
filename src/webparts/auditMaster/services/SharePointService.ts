@@ -411,16 +411,13 @@ export class SharePointService {
     if (value === undefined || value === null) {
       return undefined;
     }
-
     if (typeof value === 'string' && value.trim() === '') {
       return undefined;
     }
-
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) {
       return undefined;
     }
-
     return Math.floor(parsed);
   }
 
@@ -443,7 +440,6 @@ export class SharePointService {
       const explicitId = (payload as any)[field.target];
       const idCandidate = explicitId ?? objectValue?.Id;
       const idValue = this._toPositiveId(idCandidate);
-
       delete (payload as any)[field.name];
       if (idValue !== undefined) {
         (payload as any)[field.target] = idValue;
@@ -451,7 +447,6 @@ export class SharePointService {
         delete (payload as any)[field.target];
       }
     });
-
     return payload;
   }
 

@@ -236,6 +236,33 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     if (!fd.Status) {
       errs.Status = 'Status is required.';
     }
+    if (!fd.FindingType) {
+      errs.FindingType = 'Finding Type is required.';
+    }
+    if (!fd.ISOClauseId) {
+      errs.ISOClauseId = 'ISO Clause is required.';
+    }
+    if (!fd.Segment) {
+      errs.Segment = 'Segment is required.';
+    }
+    if (!fd.Service) {
+      errs.Service = 'Service is required.';
+    }
+    if (!fd.CategoryId) {
+      errs.CategoryId = 'Category is required.';
+    }
+    if (!fd.PICId) {
+      errs.PICId = 'PIC is required.';
+    }
+    if (!fd.AuditorId) {
+      errs.AuditorId = 'Auditor is required.';
+    }
+    if (!fd.AuditDate) {
+      errs.AuditDate = 'Audit Date is required.';
+    }
+    if (!fd.DueDate) {
+      errs.DueDate = 'Due Date is required.';
+    }
     if (!fd.FindingDescription || fd.FindingDescription.trim() === '') {
       errs.FindingDescription = 'Finding Description is required.';
     }
@@ -356,6 +383,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               selectedKey={fd.FindingType || undefined}
               options={toDropdownOptions(Object.values(FindingType))}
               onChange={(_, opt) => updateField('FindingType', opt?.key)}
+              errorMessage={errs.FindingType}
             />
           </div>
           <div>
@@ -461,6 +489,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               options={isoClauseOptions}
               onChange={(_, opt) => updateField('ISOClauseId', opt?.key)}
               placeholder="Select ISO clause"
+              errorMessage={errs.ISOClauseId}
             />
           </div>
           <div>
@@ -487,6 +516,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
                 updateField('Service', undefined);
               }}
               placeholder="Select segment"
+              errorMessage={errs.Segment}
             />
           </div>
           <div>
@@ -502,6 +532,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
                 updateField('Segment', selected ? selected.Title : fd.Segment);
               }}
               placeholder={fd.Segment ? 'Select service' : 'Select segment first'}
+              errorMessage={errs.Service}
             />
           </div>
           <div>
@@ -513,6 +544,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               options={categoryOptions}
               onChange={(_, opt) => updateField('CategoryId', opt?.key)}
               placeholder="Select category"
+              errorMessage={errs.CategoryId}
             />
           </div>
         </div>
@@ -544,6 +576,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               options={picOptions}
               onChange={(_, opt) => updateField('PICId', opt?.key)}
               placeholder="Select PIC user or Admin"
+              errorMessage={errs.PICId}
             />
           </div>
           <div>
@@ -567,6 +600,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               options={auditorOptions}
               onChange={(_, opt) => updateField('AuditorId', opt?.key)}
               placeholder="Select Auditor or Admin"
+              errorMessage={errs.AuditorId}
             />
           </div>
           <div>
@@ -607,6 +641,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               value={fd.AuditDate ? new Date(fd.AuditDate) : undefined}
               onSelectDate={(date) => updateField('AuditDate', date ? date.toISOString() : '')}
               placeholder="Select audit date"
+              textField={{ errorMessage: errs.AuditDate }}
             />
           </div>
           <div>
@@ -617,6 +652,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               value={fd.DueDate ? new Date(fd.DueDate) : undefined}
               onSelectDate={(date) => updateField('DueDate', date ? date.toISOString() : '')}
               placeholder="Select due date"
+              textField={{ errorMessage: errs.DueDate }}
             />
           </div>
           <div>
