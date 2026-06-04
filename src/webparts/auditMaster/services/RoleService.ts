@@ -104,9 +104,7 @@ export class RoleService {
       case UserRole.Admin:
         items.push(
           { key: 'create', label: 'Create New Audit Item', icon: 'Add' },
-          { key: 'all', label: 'All Audit Items', icon: 'BulletedList2' },
-          { key: 'myAssigned', label: 'My Assigned Audits', icon: 'Contact' },
-          { key: 'myPending', label: 'My Pending Audits', icon: 'CheckList' }
+          { key: 'all', label: 'All Audit Items', icon: 'BulletedList2' }
         );
         break;
 

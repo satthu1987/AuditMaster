@@ -219,10 +219,10 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     };
   });
 
-  const picOptions: IDropdownOption[] = getUserRoleOptions(['PIC', 'Admin']);
-  const qualityManagerOptions: IDropdownOption[] = getUserRoleOptions(['Manager', 'Admin']);
-  const verifierOptions: IDropdownOption[] = getUserRoleOptions(['Verifier', 'Admin']);
-  const auditorOptions: IDropdownOption[] = getUserRoleOptions(['Auditor', 'Admin']);
+  const picOptions: IDropdownOption[] = getUserRoleOptions(['PIC']);
+  const qualityManagerOptions: IDropdownOption[] = getUserRoleOptions(['Manager']);
+  const verifierOptions: IDropdownOption[] = getUserRoleOptions(['Verifier']);
+  const auditorOptions: IDropdownOption[] = getUserRoleOptions(['Auditor']);
   // ── Validation ────────────────────────────────────────────────────────────
 
   const validate = (): IValidationErrors => {
