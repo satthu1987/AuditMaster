@@ -46,8 +46,6 @@ export class RoleService {
     if (currentUser.role === UserRole.Verifier && roleItem) {
       currentUser.segmentServiceIds = this._parseSegmentIds(roleItem.Title);
     }
-
-    console.log('[RoleService] Resolved user:', currentUser);
     return currentUser;
   }
 
@@ -106,7 +104,9 @@ export class RoleService {
       case UserRole.Admin:
         items.push(
           { key: 'create', label: 'Create New Audit Item', icon: 'Add' },
-          { key: 'all', label: 'All Audit Items', icon: 'BulletedList2' }
+          { key: 'all', label: 'All Audit Items', icon: 'BulletedList2' },
+          { key: 'myAssigned', label: 'My Assigned Audits', icon: 'Contact' },
+          { key: 'myPending', label: 'My Pending Audits', icon: 'CheckList' }
         );
         break;
 

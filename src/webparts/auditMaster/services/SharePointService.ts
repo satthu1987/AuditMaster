@@ -374,7 +374,6 @@ export class SharePointService {
       `,PIC/Id,PIC/Title,PIC/EMail` +
       `,Verifier/Id,Verifier/Title,Verifier/EMail` +
       `,Auditor/Id,Auditor/Title,Auditor/EMail` +
-      `,Auditee/Id,Auditee/Title,Auditee/EMail` +
       `,CreatedByUser/Id,CreatedByUser/Title,CreatedByUser/EMail` +
       `&$expand=${this._auditExpandFields}` +
       filter +
@@ -395,7 +394,6 @@ export class SharePointService {
       `,PIC/Id,PIC/Title,PIC/EMail` +
       `,Verifier/Id,Verifier/Title,Verifier/EMail` +
       `,Auditor/Id,Auditor/Title,Auditor/EMail` +
-      `,Auditee/Id,Auditee/Title,Auditee/EMail` +
       `,CreatedByUser/Id,CreatedByUser/Title,CreatedByUser/EMail` +
       `&$expand=${this._auditExpandFields}`;
 

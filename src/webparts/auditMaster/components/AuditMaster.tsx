@@ -81,7 +81,7 @@ const AuditMaster: React.FC<IAuditMasterProps> = (props) => {
       const user = await roleService.resolveCurrentUser();
       const menuItems = roleService.getMenuItems(user);
       const defaultMenu = menuItems.length > 0 ? menuItems[0].key : '';
-
+      console.log('[AuditMaster] Initialization successful. Current user:', menuItems);
       setState({
         phase: AppPhase.Ready,
         statusMessage: '',
@@ -97,8 +97,9 @@ const AuditMaster: React.FC<IAuditMasterProps> = (props) => {
       setState(prev => ({
         ...prev,
         phase: AppPhase.Error,
-        errorMessage: `Initialization failed: ${err.message}`
+        errorMessage: `Initialization failed: ${err instanceof Error ? err.message : 'Unknown error'}`
       }));
+
     }
   };
 

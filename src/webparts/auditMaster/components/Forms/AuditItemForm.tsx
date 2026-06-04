@@ -147,7 +147,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
       }
     };
     loadData();
-    console.log('AuditItemForm mounted with editItem:', state);
   }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
