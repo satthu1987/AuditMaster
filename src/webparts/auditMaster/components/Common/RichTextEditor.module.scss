@@ -1,0 +1,102 @@
+@import '~@microsoft/sp-office-ui-fabric-core/dist/sass/SPFabricCore.scss';
+
+.rteContainer {
+  margin-bottom: 8px;
+  width: 100%;
+
+  // Editor body height – Quill container fills below the toolbar
+  :global(.ql-container) {
+    min-height: 120px;
+    font-family: 'Segoe UI', 'Segoe UI Web (West European)', -apple-system,
+      BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
+  }
+
+  :global(.ql-editor) {
+    min-height: 120px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: '[theme:bodyText, default:#323130]';
+
+    &.ql-blank::before {
+      color: #a19f9d;
+      font-style: normal;
+    }
+  }
+
+  // Focus ring matching Fluent UI
+  :global(.ql-container.ql-snow:focus-within) {
+    border-color: #0078d4;
+  }
+}
+
+// Toolbar tweaks to feel closer to Fluent UI
+.rteContainer {
+  :global(.ql-toolbar.ql-snow) {
+    border-color: #8a8886;
+    padding: 6px 8px;
+
+    :global(.ql-formats) {
+      margin-right: 10px;
+    }
+
+    button {
+      width: 26px;
+      height: 24px;
+
+      &:hover {
+        color: #0078d4;
+      }
+    }
+
+    button:hover :global(.ql-stroke) {
+      stroke: #0078d4;
+    }
+
+    :global(.ql-active) {
+      color: #0078d4;
+    }
+
+    :global(.ql-active .ql-stroke) {
+      stroke: #0078d4 !important;
+    }
+  }
+}
+
+// Read-only rendered HTML
+.readOnlyContent {
+  border: 1px solid #edebe9;
+  border-radius: 2px;
+  background-color: #faf9f8;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #323130;
+  overflow-wrap: break-word;
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+  }
+
+  td {
+    border: 1px solid #c8c6c4;
+    padding: 6px 8px;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  :global(.rte-empty) {
+    color: #a19f9d;
+  }
+}
+
+.description {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #605e5c;
+}

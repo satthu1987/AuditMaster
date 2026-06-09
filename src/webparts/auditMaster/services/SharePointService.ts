@@ -8,83 +8,18 @@ import {
   ISegmentServiceItem,
   IUserRoleItem
 } from '../models';
-import { AUDIT_FIELD_CONFIG } from '../components/config/AuditMasterSchema';
+
 /**
  * Central service for all SharePoint CRUD operations against the five
- * Audit Master lists.
+ * Audit Master lists. Field names match the exact SharePoint list structure.
  */
-
-
-interface IResolvedField {
-  internalName: string;
-  type: string;
-}
-
-
 export class SharePointService {
-  private _auditFieldMap?: Record<string, IResolvedField>;
   private _context: WebPartContext;
   private _siteUrl: string;
-  private _auditSelectFieldsCache?: string;
-  private _segmentServicesCache?: ISegmentServiceItem[];
-  private _auditMasterFieldsCache?: Array<{ Title: string; InternalName: string; TypeAsString: string }>;
-
-
-  private _normalize(value: string): string {
-    return String(value || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '');
-  }
 
   constructor(context: WebPartContext, siteUrl: string) {
     this._context = context;
     this._siteUrl = siteUrl;
-  }
-
-  private async _getAuditFieldMap():
-    Promise<Record<string, IResolvedField>> {
-
-    if (this._auditFieldMap) {
-      return this._auditFieldMap;
-    }
-
-    const fields =
-      await this._getAuditMasterFields();
-
-    const result:
-      Record<string, IResolvedField> = {};
-
-    for (const config of AUDIT_FIELD_CONFIG) {
-
-      let match =
-        fields.find(f =>
-          config.types.includes(f.TypeAsString) &&
-          config.aliases.some(alias =>
-            this._normalize(f.Title) === alias ||
-            this._normalize(f.InternalName) === alias
-          )
-        ) ||
-        fields.find(f =>
-          config.types.includes(f.TypeAsString) &&
-          config.aliases.some(alias =>
-            this._normalize(f.Title).includes(alias) ||
-            this._normalize(f.InternalName).includes(alias)
-          )
-        );
-
-      if (match) {
-        result[config.key] = {
-          internalName: match.InternalName,
-          type: match.TypeAsString
-        };
-      }
-    }
-
-    this._auditFieldMap = result;
-
-    console.log('Resolved fields', result);
-
-    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -108,9 +43,6 @@ export class SharePointService {
     return `${this._siteUrl}/_api/web/lists/getbytitle('${encodeURIComponent(listTitle)}')`;
   }
 
-  /**
-   * Generic GET returning JSON.
-   */
   private async _get<T>(url: string): Promise<T> {
     const response: SPHttpClientResponse = await this._context.spHttpClient.get(
       url, SPHttpClient.configurations.v1, this._headers('GET')
@@ -122,9 +54,6 @@ export class SharePointService {
     return response.json() as Promise<T>;
   }
 
-  /**
-   * Generic POST (create).
-   */
   private async _post<T>(url: string, body: any): Promise<T> {
     const options: ISPHttpClientOptions = {
       ...this._headers('POST'),
@@ -140,9 +69,6 @@ export class SharePointService {
     return response.json() as Promise<T>;
   }
 
-  /**
-   * Generic MERGE (update).
-   */
   private async _merge(url: string, body: any): Promise<void> {
     const options: ISPHttpClientOptions = {
       ...this._headers('MERGE'),
@@ -190,9 +116,21 @@ export class SharePointService {
 
   public async getISOClauses(): Promise<IISOClauseItem[]> {
     const data = await this._get<{ value: any[] }>(
-      `${this._listUrl(LIST_NAMES.ISO_CLAUSE)}/items?$select=Id,ISOClause,ISOlevel2,ISOlevel1,Article,Order&$orderby=Order asc&$top=500`
+      `${this._listUrl(LIST_NAMES.ISO_CLAUSE)}/items?$select=Id,ISOClause,ISOlevel2,ISOlevel1,Article,Order0&$orderby=Order0 asc&$top=500`
     );
     return data.value;
+  }
+
+  /**
+   * Fetch a single ISOClause list item by its Id, including all the fields
+   * needed for cascading auto-population (ISOClause, ISOlevel2 → ISO Chapter,
+   * ISOlevel1 → ISO Level, Article).
+   */
+  public async getISOClauseById(itemId: number): Promise<IISOClauseItem> {
+    const data = await this._get<IISOClauseItem>(
+      `${this._listUrl(LIST_NAMES.ISO_CLAUSE)}/items(${itemId})?$select=Id,ISOClause,ISOlevel2,ISOlevel1,Article,Order0`
+    );
+    return data;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -200,14 +138,9 @@ export class SharePointService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   public async getSegmentServices(): Promise<ISegmentServiceItem[]> {
-    if (this._segmentServicesCache) {
-      return this._segmentServicesCache;
-    }
-
     const data = await this._get<{ value: any[] }>(
-      `${this._listUrl(LIST_NAMES.SEGMENT_SERVICE)}/items?$select=Id,Title,Service,Service_Short,Division,Order,DetailCategory&$orderby=Order asc&$top=500`
+      `${this._listUrl(LIST_NAMES.SEGMENT_SERVICE)}/items?$select=Id,Title,Service,Service_Short,Division,Order0,DetailCategory&$orderby=Order0 asc&$top=500`
     );
-    this._segmentServicesCache = data.value;
     return data.value;
   }
 
@@ -229,273 +162,306 @@ export class SharePointService {
     return data.value.length > 0 ? data.value[0] : null;
   }
 
+  /**
+   * Fetch users from the UserRole list filtered by a specific role.
+   * Expands the Account (Person) field to get Title and EMail for display.
+   */
+  public async getUsersByRole(role: string): Promise<IUserRoleItem[]> {
+    const data = await this._get<{ value: any[] }>(
+      `${this._listUrl(LIST_NAMES.USER_ROLE)}/items` +
+      `?$select=Id,Title,AccountId,Role,Account/Id,Account/Title,Account/EMail` +
+      `&$expand=Account` +
+      `&$filter=Role eq '${role}'` +
+      `&$top=500`
+    );
+    return data.value;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  Audit Master List – READ
   // ═══════════════════════════════════════════════════════════════════════════
 
-  private readonly _auditSelectFieldsBase: string[] = [
-    'Id', 'Title', 'AuditId',
-    'Status', 'FindingType', 'Region', 'AuditType', 'VerificationResult', 'InternalExternal',
-    'FindingDescription', 'RequiredRCA', 'QuickFix', 'ActionTaken', 'PIONumber', 'RCDescription',
-    'CategoryId', 'ISOClauseId', 'Service', 'Segment', 'Article',
-    'PICId', 'QualityManagerId', 'AuditorId', 'VerifierId', 'CreatedByUserId',
-    'AuditDate', 'DueDate', 'ClosedDate', 'VerificationDate',
-    'EvidenceLink', 'ConfluencePage',
-    'Year', 'VerificationDateCalculated',
-    'QLVerification',
+  // Select fields using SharePoint REST API internal names.
+  // Person fields use the "Id" suffix; lookup fields use "Id" suffix for the FK.
+  // Dependent lookups (Segment, Article, Division) are read-only projected fields.
+   private readonly _auditSelectFields: string = [
+    'Id', 'Title',
+    // Person field IDs
+    'PICId', 'QualityManagerId', 'AuditorId', 'VerifierId',
+    // Choice fields
+    'Status', 'FindingType', 'Region',
+    'VerificationResult', 'InternalExternal',
+    'ActionStatus', 'QLVerification',
+    // Text / Note fields
+    'FindingDescription', 'QuickFix', 'ActionTaken',
+    'RCDescription', 'PIONumber',
+    // Dates
+    'DueDate', 'AuditDate', 'VerificationDate', 'ClosedDate',
+    // Hyperlink fields
+    'EvidenceLink', 
+    // Lookup IDs (primary lookups)
+    'ISOClauseId', 'ServiceId',
+    'CategoryId',
+    // #30 ISOClause for Article_lookup – separate primary lookup ID
+    'Article',
+    // Dependent lookups (projected values, read-only)
+    'Segment',   // #8  dependent from Service (#7)
+    // Calculated
+    'Year', 'FindingNumber', 'VerificationDateCalculated',
+    // System
     'Created', 'Modified'
-  ];
-
-  private readonly _auditExpandFields: string = [
-    'PIC', 'Verifier', 'Auditor', 'CreatedByUser'
   ].join(',');
 
-  private async _getAuditMasterFields(): Promise<Array<{ Title: string; InternalName: string; TypeAsString: string }>> {
-    if (this._auditMasterFieldsCache) {
-      return this._auditMasterFieldsCache;
-    }
+  // Expand person and primary lookup fields to get sub-properties
+  private readonly _auditExpandFields: string = [
+    'PIC', 'QualityManager', 'Auditor', 'Verifier',
+    'ISOClause', 'Service',
+    'FindingISOChapter', 'Category',
+    'ISOClauseforArticle_lookup',
+    'Service_Lookup'
+  ].join(',');
 
-    const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/fields?$select=Title,InternalName,TypeAsString&$top=500`;
-    const data = await this._get<{ value: Array<{ Title: string; InternalName: string; TypeAsString: string }> }>(url);
-    this._auditMasterFieldsCache = data.value;
-    return data.value;
-  }
+  private readonly _auditExpandSelect: string = [
+    'PIC/Id', 'PIC/Title', 'PIC/EMail',
+    'QualityManager/Id', 'QualityManager/Title', 'QualityManager/EMail',
+    'Auditor/Id', 'Auditor/Title', 'Auditor/EMail',
+    'Verifier/Id', 'Verifier/Title', 'Verifier/EMail',
+    // ISO clause lookup → pull every display column we surface in the form
+    // (ISOClause text + the ISO level / article columns used for auto-fill).
+    'ISOClause/Id', 'ISOClause/ISOClause',
+    'ISOClause/ISOlevel1', 'ISOClause/ISOlevel2',
+    'ISOClause/Article',
+    'Service/Id', 'Service/Service',
+    'FindingISOChapter/Id', 'FindingISOChapter/ISOClause',
+    'Category/Id', 'Category/Category',
+    'ISOClauseforArticle_lookup/Id', 'ISOClauseforArticle_lookup/ISOClause',
+    'Service_Lookup/Id', 'Service_Lookup/Title'
+  ].join(',');
 
+  // ───────────────────────────────────────────────────────────────────────────
+  //  Lookup-expansion helpers
+  //
+  //  SharePoint lookup columns are NOT returned as objects by default. To get
+  //  the related list's display columns (e.g. ISO clause text, Service name,
+  //  Category) the REST query MUST:
+  //    1. $expand the lookup field by its internal name, and
+  //    2. $select the specific sub-columns (Lookup/DisplayColumn).
+  //  If even ONE expanded field name is wrong, SharePoint rejects the whole
+  //  request with HTTP 400 and every field comes back blank. To stay resilient
+  //  we attempt the fully-expanded query first and, on failure, fall back to a
+  //  base query (no $expand) so the form still loads with the raw FK ids while
+  //  logging a clear diagnostic about which expand likely failed.
+  // ───────────────────────────────────────────────────────────────────────────
 
-  private async _getAuditSelectFields():
-    Promise<string> {
-
-    if (this._auditSelectFieldsCache) {
-      return this._auditSelectFieldsCache;
-    }
-
-    const fieldMap =
-      await this._getAuditFieldMap();
-
-    const fields = [
-      ...this._auditSelectFieldsBase
-    ];
-
-    for (const config of AUDIT_FIELD_CONFIG) {
-
-      if (!config.includeInSelect) {
-        continue;
-      }
-
-      const field =
-        fieldMap[config.key];
-
-      if (!field) {
-        continue;
-      }
-
-      const selectField =
-        ['Lookup', 'LookupMulti']
-          .includes(field.type)
-          ? `${field.internalName}Id`
-          : field.internalName;
-
-      if (!fields.includes(selectField)) {
-        fields.push(selectField);
-      }
-    }
-
-    this._auditSelectFieldsCache =
-      fields.join(',');
-
-    console.log(
-      'Audit Select Fields',
-      this._auditSelectFieldsCache
+  /** Build the query-string for the fully-expanded audit item read. */
+  private _auditExpandedQuery(): string {
+    return (
+      `?$select=${this._auditSelectFields},${this._auditExpandSelect}` +
+      `&$expand=${this._auditExpandFields}`
     );
-
-    return this._auditSelectFieldsCache;
   }
 
+  /** Build the query-string for the base (no-lookup-expansion) fallback read. */
+  private _auditBaseQuery(): string {
+    return `?$select=${this._auditSelectFields}`;
+  }
+
+  /**
+   * Log the lookup data that came back so the actual SharePoint field/property
+   * names and values are visible in the browser console. This makes it obvious
+   * whether a lookup (e.g. ISO clause) was expanded correctly or is missing.
+   */
+  private _debugLogAuditLookups(context: string, items: IAuditMasterItem[]): void {
+    try {
+      console.log(`[SharePointService] ${context}: received ${items.length} item(s).`);
+      if (items.length === 0) { return; }
+      const sample = items[0];
+      console.log(`[SharePointService] ${context}: sample item property names →`, Object.keys(sample));
+      console.log(`[SharePointService] ${context}: sample lookup values →`, {
+        ISOClauseId: sample.ISOClauseId,
+        ISOClause: sample.ISOClause,
+        ServiceId: sample.ServiceId,
+        Service: sample.Service,
+        Segment: sample.Segment,
+        CategoryId: sample.CategoryId,
+        Category: sample.Category,
+        Article: sample.Article,
+        Division: sample.Division
+      });
+    } catch (e) {
+      // Never let logging break a data fetch.
+      console.warn(`[SharePointService] ${context}: debug logging failed`, e);
+    }
+  }
+
+  /**
+   * Fetch a list of audit items, trying the fully-expanded query first and
+   * gracefully falling back to a base (no-expand) query if the expand fails.
+   */
+  private async _fetchAuditItems(
+    context: string,
+    filter: string
+  ): Promise<IAuditMasterItem[]> {
+    const base = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items`;
+    const tail = `${filter}&$orderby=Modified desc&$top=500`;
+    const expandedUrl = `${base}${this._auditExpandedQuery()}${tail}`;
+
+    try {
+      console.log(`[SharePointService] ${context}: GET (expanded) ${expandedUrl}`);
+      const data = await this._get<{ value: IAuditMasterItem[] }>(expandedUrl);
+      this._debugLogAuditLookups(context, data.value);
+      return data.value;
+    } catch (err) {
+      console.warn(
+        `[SharePointService] ${context}: expanded query failed – falling back to ` +
+        `a non-expanded read. This usually means a lookup field internal name in ` +
+        `_auditExpandFields/_auditExpandSelect does not match the SharePoint list. ` +
+        `Lookup display values may be blank until the names are corrected.`,
+        err
+      );
+      const fallbackUrl = `${base}${this._auditBaseQuery()}${tail}`;
+      console.log(`[SharePointService] ${context}: GET (fallback) ${fallbackUrl}`);
+      const data = await this._get<{ value: IAuditMasterItem[] }>(fallbackUrl);
+      this._debugLogAuditLookups(`${context} (fallback)`, data.value);
+      return data.value;
+    }
+  }
 
   /**
    * Get all Audit Master items (Admin view).
    */
   public async getAllAuditItems(): Promise<IAuditMasterItem[]> {
-    const selectFields = await this._getAuditSelectFields();
-    const url =
-      `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items` +
-      `?$select=${selectFields}` +
-      `,PIC/Id,PIC/Title,PIC/EMail` +
-      `,Verifier/Id,Verifier/Title,Verifier/EMail` +
-      `,Auditor/Id,Auditor/Title,Auditor/EMail` +
-      `,CreatedByUser/Id,CreatedByUser/Title,CreatedByUser/EMail` +
-      `&$expand=${this._auditExpandFields}` +
-      `&$orderby=Modified desc&$top=500`;
-
-    const data = await this._get<{ value: any[] }>(url);
-    return data.value;
+    return this._fetchAuditItems('getAllAuditItems', '');
   }
 
   /**
    * Get Audit items assigned to a specific PIC.
    */
   public async getAuditItemsByPIC(userId: number): Promise<IAuditMasterItem[]> {
-    const selectFields = await this._getAuditSelectFields();
-    const url =
-      `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items` +
-      `?$select=${selectFields}` +
-      `,PIC/Id,PIC/Title,PIC/EMail` +
-      `,Verifier/Id,Verifier/Title,Verifier/EMail` +
-      `,Auditor/Id,Auditor/Title,Auditor/EMail` +
-      `,CreatedByUser/Id,CreatedByUser/Title,CreatedByUser/EMail` +
-      `&$expand=${this._auditExpandFields}` +
-      `&$filter=PICId eq ${userId}` +
-      `&$orderby=Modified desc&$top=500`;
-
-    const data = await this._get<{ value: any[] }>(url);
-    return data.value;
+    return this._fetchAuditItems('getAuditItemsByPIC', `&$filter=PICId eq ${userId}`);
   }
 
   /**
-   * Get Audit items pending verification filtered by Segment/Service IDs
-   * (Verifier view – items that belong to their department/segment).
+   * Get Audit items pending verification filtered by Service lookup IDs
+   * (Verifier view).
    */
   public async getAuditItemsForVerifier(
     segmentServiceIds: number[]
   ): Promise<IAuditMasterItem[]> {
-    const selectFields = await this._getAuditSelectFields();
-    // Build filter for segment service ids
     let filter = '';
     if (segmentServiceIds.length > 0) {
-      const conditions = segmentServiceIds.map(id => `SegmentServiceId eq ${id}`);
+      const conditions = segmentServiceIds.map(id => `ServiceId eq ${id}`);
       filter = `&$filter=(${conditions.join(' or ')}) and (Status eq 'Pending Verification')`;
     } else {
       filter = `&$filter=Status eq 'Pending Verification'`;
     }
-
-    const url =
-      `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items` +
-      `?$select=${selectFields}` +
-      `,PIC/Id,PIC/Title,PIC/EMail` +
-      `,Verifier/Id,Verifier/Title,Verifier/EMail` +
-      `,Auditor/Id,Auditor/Title,Auditor/EMail` +
-      `,CreatedByUser/Id,CreatedByUser/Title,CreatedByUser/EMail` +
-      `&$expand=${this._auditExpandFields}` +
-      filter +
-      `&$orderby=Modified desc&$top=500`;
-
-    const data = await this._get<{ value: any[] }>(url);
-    return data.value;
+    return this._fetchAuditItems('getAuditItemsForVerifier', filter);
   }
 
   /**
-   * Get a single Audit Master item by ID.
+   * Get a single Audit Master item by ID, with all lookup fields expanded.
+   * Falls back to a non-expanded read if the expand fails so the form can still
+   * open. The returned object is logged so the actual lookup values/property
+   * names are visible for debugging "blank lookup" issues.
    */
   public async getAuditItemById(itemId: number): Promise<IAuditMasterItem> {
-    const selectFields = await this._getAuditSelectFields();
-    const url =
-      `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${itemId})` +
-      `?$select=${selectFields}` +
-      `,PIC/Id,PIC/Title,PIC/EMail` +
-      `,Verifier/Id,Verifier/Title,Verifier/EMail` +
-      `,Auditor/Id,Auditor/Title,Auditor/EMail` +
-      `,CreatedByUser/Id,CreatedByUser/Title,CreatedByUser/EMail` +
-      `&$expand=${this._auditExpandFields}`;
+    const base = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${itemId})`;
+    const expandedUrl = `${base}${this._auditExpandedQuery()}`;
 
-    const data = await this._get<any>(url);
-    return data;
+    try {
+      console.log(`[SharePointService] getAuditItemById(${itemId}): GET (expanded) ${expandedUrl}`);
+      const item = await this._get<IAuditMasterItem>(expandedUrl);
+      this._debugLogAuditLookups(`getAuditItemById(${itemId})`, [item]);
+      return item;
+    } catch (err) {
+      console.warn(
+        `[SharePointService] getAuditItemById(${itemId}): expanded query failed – ` +
+        `falling back to a non-expanded read. Verify the lookup field internal ` +
+        `names in _auditExpandFields/_auditExpandSelect against the SharePoint list.`,
+        err
+      );
+      const fallbackUrl = `${base}${this._auditBaseQuery()}`;
+      console.log(`[SharePointService] getAuditItemById(${itemId}): GET (fallback) ${fallbackUrl}`);
+      const item = await this._get<IAuditMasterItem>(fallbackUrl);
+      this._debugLogAuditLookups(`getAuditItemById(${itemId}) (fallback)`, [item]);
+      return item;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  Audit Master List – CREATE / UPDATE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  private _toPositiveId(value: unknown): number | undefined {
-    if (value === undefined || value === null) {
-      return undefined;
-    }
-    if (typeof value === 'string' && value.trim() === '') {
-      return undefined;
-    }
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      return undefined;
-    }
-    return Math.floor(parsed);
-  }
-
-  private async _toAuditWritePayload(item: Partial<IAuditMasterItem>): Promise<any> {
-    const payload: any = { ...item };
-
-    const userFieldTargets = AUDIT_FIELD_CONFIG
-      .filter(config =>
-        config.types.some(t =>
-          ['User', 'UserMulti'].includes(t)
-        )
-      )
-      .map(config => ({
-        name: config.key,
-        target: `${config.key}Id`
-      }));
-
-    userFieldTargets.forEach((field) => {
-      const objectValue = (payload as any)[field.name];
-      const explicitId = (payload as any)[field.target];
-      const idCandidate = explicitId ?? objectValue?.Id;
-      const idValue = this._toPositiveId(idCandidate);
-      delete (payload as any)[field.name];
-      if (idValue !== undefined) {
-        (payload as any)[field.target] = idValue;
-      } else {
-        delete (payload as any)[field.target];
-      }
-    });
-    return payload;
-  }
-
   /**
    * Create a new Audit Master item. Returns the created item.
    */
   public async createAuditItem(item: Partial<IAuditMasterItem>): Promise<IAuditMasterItem> {
-    const payload: any = await this._toAuditWritePayload(item);
-
-    const currentUserId = await this.getCurrentUserId();
-    payload.CreatedByUserId = currentUserId;
-    delete payload.AuditId;
-    console.log('Creating item with payload', payload);
+    const payload = this._buildAuditPayload(item);
     const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items`;
-    const created = await this._post<IAuditMasterItem>(url, payload);
-
-    if (!created.Id) {
-      throw new Error('Failed to create audit item. No SharePoint item ID returned.');
-    }
-    const generatedAuditId =
-      `AUD-${new Date().getFullYear()}-${String(created.Id).padStart(4, '0')}`;
-    const updateUrl =
-      `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${created.Id})`;
-
-    await this._merge(updateUrl, {
-      AuditId: generatedAuditId
-    });
-    return {
-      ...created,
-      AuditId: generatedAuditId
-    };
+    return this._post<IAuditMasterItem>(url, payload);
   }
 
   /**
    * Update an existing Audit Master item.
    */
   public async updateAuditItem(itemId: number, item: Partial<IAuditMasterItem>): Promise<void> {
-    const payload: any = await this._toAuditWritePayload(item);
-    const currentUserId = await this.getCurrentUserId();
-    payload.CreatedByUserId = currentUserId;
+    const payload = this._buildAuditPayload(item);
     const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${itemId})`;
     await this._merge(url, payload);
+  }
+
+  /**
+   * Build a clean payload stripping read-only, calculated, and expand fields.
+   * Uses the exact internal field names that SharePoint REST API expects.
+   */
+  private _buildAuditPayload(item: Partial<IAuditMasterItem>): any {
+    const payload: any = {};
+
+    // Single line of text
+    if (item.Title !== undefined) payload.Title = item.Title;
+    if (item.PIONumber !== undefined) payload.PIONumber = item.PIONumber;
+
+    // Choice fields
+    if (item.Status !== undefined) payload.Status = item.Status;
+    if (item.FindingType !== undefined) payload.FindingType = item.FindingType;
+    if (item.VerificationResult !== undefined) payload.VerificationResult = item.VerificationResult;
+    if (item.QLVerification !== undefined) payload.Q_x0026_Lverification = item.QLVerification;
+
+    // Multiple lines of text
+    if (item.FindingDescription !== undefined) payload.FindingDescription = item.FindingDescription;
+    if (item.QuickFix !== undefined) payload.Quickfix = item.QuickFix;
+    if (item.ActionTaken !== undefined) payload.ActionTaken = item.ActionTaken;
+    if (item.RCDescription !== undefined) payload.RCdescription = item.RCDescription;
+
+    // Date fields
+    if (item.DueDate !== undefined) payload.DueDate = item.DueDate;
+    if (item.AuditDate !== undefined) payload.AuditDate = item.AuditDate;
+    if (item.VerificationDate !== undefined) payload.VerificationDate = item.VerificationDate;
+
+    // Hyperlink fields – stored as { Url, Description }
+    if (item.EvidenceLink !== undefined) {
+      payload.EvidenceLink = item.EvidenceLink;
+    }
+
+    // Person field IDs
+    if (item.PICId !== undefined) payload.PICId = item.PICId;
+    if (item.AuditorId !== undefined) payload.AuditorId = item.AuditorId;
+
+    // Lookup IDs (primary lookups only – dependent lookups are read-only)
+    if (item.ISOClauseId !== undefined) payload.ISOclauseId = item.ISOClauseId;
+    if (item.ServiceId !== undefined) payload.ServiceId = item.ServiceId;
+    if (item.CategoryId !== undefined) payload.CategoryId = item.CategoryId;
+
+    // NOTE: Dependent lookups (#8 Segment, #31 Article, #33 Division) are read-only.
+    // NOTE: Calculated fields (#25 Year, #26 FindingNumber, #34 VerificationDateCalculated) are read-only.
+
+    return payload;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  People Picker helper
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /**
-   * Resolve a user by email or login name and return their SP user ID.
-   */
   public async ensureUser(loginName: string): Promise<number> {
     const url = `${this._siteUrl}/_api/web/ensureuser`;
     const body = { logonName: loginName };
@@ -513,24 +479,9 @@ export class SharePointService {
     return data.Id;
   }
 
-  /**
-   * Search people by query string (for people picker autocomplete).
-   */
   public async searchPeople(query: string): Promise<Array<{ Id: number; Title: string; Email: string }>> {
     const url = `${this._siteUrl}/_api/web/siteusers?$select=Id,Title,Email&$filter=substringof('${encodeURIComponent(query)}',Title)&$top=10`;
     const data = await this._get<{ value: any[] }>(url);
-    return data.value;
-  }
-
-  public async getUsersByIds(userIds: number[]): Promise<Array<{ Id: number; Title: string; Email: string }>> {
-    if (userIds.length === 0) {
-      return [];
-    }
-
-    const uniqueIds = Array.from(new Set(userIds));
-    const idFilter = uniqueIds.map(id => `Id eq ${id}`).join(' or ');
-    const url = `${this._siteUrl}/_api/web/siteusers?$select=Id,Title,Email&$filter=${encodeURIComponent(idFilter)}&$top=500`;
-    const data = await this._get<{ value: Array<{ Id: number; Title: string; Email: string }> }>(url);
     return data.value;
   }
 }

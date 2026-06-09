@@ -111,14 +111,20 @@ export interface IAuditMasterItem {
   FindingType: FindingType;
 
   // 5. Region – Choice
-  Region: string;
+  //Region: string;
 
   // AuditType – Choice
   AuditType?: AuditType;
 
   // 6. ISO clause – Lookup (primary, to ISOClause list → ISOClause field)
   ISOClauseId: number;
-  ISOClause?: { Id: number; ISOClause: string };
+  ISOClause?: { 
+    Id: number; 
+    ISOClause: string 
+    ISOlevel1?: string;
+    ISOlevel2?: string;
+    Article?: string;
+  };
 
   // 7. Service – Single line of text
   Service?: string;
@@ -126,9 +132,12 @@ export interface IAuditMasterItem {
   // 8. Segment – Single line of text
   Segment?: string;
 
+   // 8. Division – Single line of text
+  Division?: string;
+
   // 9. Quality Manager – Person or Group
-  QualityManagerId: number;
-  QualityManager?: { Id: number; Title: string; EMail: string };
+  //QualityManagerId: number;
+  //QualityManager?: { Id: number; Title: string; EMail: string };
 
   // Verifier – Person or Group
   VerifierId: number;
@@ -142,7 +151,7 @@ export interface IAuditMasterItem {
   FindingDescription: string;
 
   // 12. Required RCA – Yes/No
-  RequiredRCA: boolean;
+  //RequiredRCA: boolean;
 
   // 13. Quick fix – Multiple lines of text
   QuickFix: string;
@@ -157,7 +166,7 @@ export interface IAuditMasterItem {
   VerificationResult: VerificationResult;
 
   // 17. Internal/External – Choice
-  InternalExternal: InternalExternal;
+  //InternalExternal: InternalExternal;
 
   // 18. ISO Chapter – Lookup (to ISOClause list)
   ISOChapterId: number;
@@ -186,10 +195,10 @@ export interface IAuditMasterItem {
   Year: string;
 
   // 27. Closed Date – Date and Time
-  ClosedDate: string;
+  //ClosedDate: string;
 
   // 28. Confluence Page – Hyperlink or Picture
-  ConfluencePage: IHyperlinkField;
+  //ConfluencePage: IHyperlinkField;
 
   // 29. Category – Lookup (to AuditCategory list → Category field)
   CategoryId: number;
@@ -220,11 +229,11 @@ export interface IHyperlinkField {
 
 export enum AuditStatus {
   Open = 'Open',
-  InProgress = 'In Progress',
-  PendingVerification = 'Pending Verification',
+  InProgress = 'Action In Progress',
+  Verification = 'Verification',
   Closed = 'Closed',
-  Overdue = 'Overdue',
-  Cancelled = 'Cancelled'
+  ActionOverdue = 'Action Overdue',
+  VerificationOverdue = 'Verification Overdue'
 }
 
 export enum FindingType {
@@ -242,27 +251,22 @@ export enum QLVerification {
   No = 'No'
 }
 
-export enum InternalExternal {
-  Internal = 'Internal',
-  External = 'External'
-}
-
 export enum AuditType {
   Internal = 'Internal',
   External = 'External',
-  Surveillance = 'Surveillance',
-  Certification = 'Certification',
-  Recertification = 'Recertification'
+  Custom = 'Custom',
+ // Certification = 'Certification',
+ // Recertification = 'Recertification'
 }
 
 
 // ─── Region choices ──────────────────────────────────────────────────────────
-export const RegionChoices: string[] = [
+/* export const RegionChoices: string[] = [
   'Asia',
   'North America',
   'Europe',
   'Global'
-];
+]; */
 
 // ─── Division choices for Segment_Service ────────────────────────────────────
 export const DivisionChoices: string[] = [

@@ -19,61 +19,64 @@ import {
   ICategoryItem,
   IISOClauseItem,
   ISegmentServiceItem,
-  ICurrentUser,
   IValidationErrors,
-  IUserRoleItem,
   AuditStatus,
   FindingType,
-  AuditType,
   VerificationResult,
   QLVerification
 } from '../../models';
-import { SharePointService, RoleService } from '../../services';
 import { RichTextEditor } from '../Common';
+import { IAuditItemFormProps } from './AuditItemForm';
 
-export interface IAuditItemFormProps {
-  spService: SharePointService;
-  roleService: RoleService;
-  currentUser: ICurrentUser;
-  editItem?: IAuditMasterItem;       // if provided, we're in edit mode
-  onSaved: () => void;               // callback after successful save
-  onCancel: () => void;
-}
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ *  PIC_Detail – PIC (Person In Charge) specific audit detail form
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ *  This is a role-tailored variant of `AuditItemForm`, used by `PICView` for the
+ *  PIC role. It shares the exact same props interface (`IAuditItemFormProps`) so
+ *  it is a drop-in replacement, and reuses the same shared components
+ *  (RolePeoplePicker, RichTextEditor) and SharePoint services.
+ *
+ *  EDITABILITY FOR A PIC
+ *  ─────────────────────
+ *    ✔ EDITABLE   – Finding Details  (description, root-cause, quick fix,
+ *                                      action taken, required-RCA toggle)
+ *    ✔ EDITABLE   – Status field      (so the PIC can move the item forward,
+ *                                      e.g. → Pending Verification)
+ *    ✔ EDITABLE   – Verification & Links (the PIC prepares evidence / links)
+ *
+ *    RO READ-ONLY – Basic Information   (set when the finding was raised)
+ *    RO READ-ONLY – Classification      (ISO clause, service, category …)
+ *    RO READ-ONLY – People              (PIC / QM / Auditor / Verifier)
+ *    RO READ-ONLY – Action Status + all Dates (admin/verifier controlled)
+ *    RO READ-ONLY – Calculated fields
+ *
+ *  The descriptive sections are still rendered (disabled) so the PIC has full
+ *  context while working their finding. If the PIC has no edit rights on the
+ *  item at all (RoleService.canUpdate === false, e.g. the item is not assigned
+ *  to them) the whole form falls back to read-only via the `ro` flag.
+ * ════════════════════════════════════════════════════════════════════════════
+ */
 
 interface IFormState {
   formData: Partial<IAuditMasterItem>;
   categories: ICategoryItem[];
   isoClauses: IISOClauseItem[];
   segmentServices: ISegmentServiceItem[];
-  userRoles: IUserRoleItem[];
-  usersById: { [id: number]: { Id: number; Title: string; Email: string } };
   errors: IValidationErrors;
   isSaving: boolean;
   isLoading: boolean;
   successMessage: string;
   errorMessage: string;
   isReadOnly: boolean;
-  // Cascading ISO Clause derived values (auto-populated from the selected clause)
-  isoChapter: string;   // ← ISOlevel2
-  isoLevel: string;     // ← ISOlevel1
-  isoArticle: string;   // ← Article
-  isLoadingISO: boolean;
+  // Cascading ISO Clause derived values (read-only context for the PIC)
+  isoChapter: string;
+  isoLevel: string;
+  isoArticle: string;
 }
 
-/**
- * Full Audit Master item form – used for both Create and Edit.
- * Matches the exact 34-field structure from the SharePoint list.
- *
- * Sections:
- *  1. Basic Information (Title, FindingType, Region, Internal/External, PIONumber)
- *  2. Classification (ISO clause, Service, Category)
- *  3. People (PIC, Quality Manager, Auditor, Verified by)
- *  4. Finding Details (Finding Description, Root Cause, Quick fix, Action Taken)
- *  5. Dates & Status (Status, Action Status, dates, Required RCA)
- *  6. Verification & Links (Verification Result, Q&L verification, Evidence, Confluence Page)
- *  7. Calculated / Dependent Fields (read-only)
- */
-const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
+const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
   const { spService, roleService, currentUser, editItem, onSaved, onCancel } = props;
 
   const isEditMode = !!editItem;
@@ -87,8 +90,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     categories: [],
     isoClauses: [],
     segmentServices: [],
-    userRoles: [],
-    usersById: {},
     errors: {},
     isSaving: false,
     isLoading: true,
@@ -97,32 +98,29 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     isReadOnly: false,
     isoChapter: '',
     isoLevel: '',
-    isoArticle: '',
-    isLoadingISO: false
+    isoArticle: ''
   });
 
   // ── Load reference data on mount ──────────────────────────────────────────
   React.useEffect(() => {
     const loadData = async (): Promise<void> => {
       try {
-        const [categories, isoClauses, segmentServices, userRoles] = await Promise.all([
+        const [categories, isoClauses, segmentServices] = await Promise.all([
           spService.getCategories(),
           spService.getISOClauses(),
-          spService.getSegmentServices(),
-          spService.getUserRoles()
+          spService.getSegmentServices()
         ]);
 
-        const roleUserIds = Array.from(
-          new Set(
-            userRoles
-              .filter(r => r.AccountId)
-              .map(r => r.AccountId)
-          )
-        );
+        // Permission check – if the PIC can't update this specific item the
+        // whole form is shown read-only.
+        let readOnly = false;
+        if (isEditMode && editItem) {
+          readOnly = !roleService.canUpdate(currentUser, editItem);
+        } else {
+          readOnly = !roleService.canCreate(currentUser);
+        }
 
-       
-
-        // Pre-populate derived ISO Clause fields when editing an existing item
+        // Pre-populate read-only derived ISO Clause display values.
         let isoChapter = '';
         let isoLevel = '';
         let isoArticle = '';
@@ -141,14 +139,14 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           categories,
           isoClauses,
           segmentServices,
-          userRoles,
           isLoading: false,
+          isReadOnly: readOnly,
           isoChapter,
           isoLevel,
           isoArticle
         }));
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to save audit item.';
+        const errorMessage = err instanceof Error ? err.message : 'Failed to load form data.';
         setState(prev => ({
           ...prev,
           isLoading: false,
@@ -160,7 +158,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   }, []);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-
   const updateField = (field: string, value: any): void => {
     setState(prev => ({
       ...prev,
@@ -169,61 +166,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
       successMessage: '',
       errorMessage: ''
     }));
-  };
-
- // ── Cascading ISO Clause selection ─────────────────────────────────────────
-  // When the ISO Clause changes, fetch the full ISOClause list item and
-  // auto-populate the read-only ISO Chapter (ISOlevel2), ISO Level (ISOlevel1)
-  // and Article fields. Clearing the clause resets all three.
-  const handleISOClauseChange = async (clauseId: number | undefined): Promise<void> => {
-    // Update the lookup id first
-    setState(prev => ({
-      ...prev,
-      formData: { ...prev.formData, ISO_x0020_clauseId: clauseId as number },
-      errors: { ...prev.errors, ISO_x0020_clauseId: '' },
-      successMessage: '',
-      errorMessage: ''
-    }));
-
-    // Cleared → reset dependent fields. (Article/ISO Chapter/ISO Level are
-    // derived display values, so they are reset in local state only.)
-    if (!clauseId) {
-      setState(prev => ({
-        ...prev,
-        isoChapter: '',
-        isoLevel: '',
-        isoArticle: '',
-        isLoadingISO: false,
-        formData: { ...prev.formData, ISO_x0020_clauseId: undefined as any }
-      }));
-      return;
-    }
-
-    // Start loading the dependent values
-    setState(prev => ({ ...prev, isLoadingISO: true }));
-
-    try {
-      const clause = await spService.getISOClauseById(clauseId);
-      setState(prev => ({
-        ...prev,
-        isLoadingISO: false,
-        isoChapter: clause.ISOlevel2 || '',
-        isoLevel: clause.ISOlevel1 || '',
-        isoArticle: clause.Article || ''
-      }));
-    } catch (err) {
-      // Fallback to the cached list if the single-item fetch fails
-      const cached = state.isoClauses.filter(c => c.Id === clauseId)[0];
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load ISO Clause details.';
-      setState(prev => ({
-        ...prev,
-        isLoadingISO: false,
-        isoChapter: cached ? (cached.ISOlevel2 || '') : '',
-        isoLevel: cached ? (cached.ISOlevel1 || '') : '',
-        isoArticle: cached ? (cached.Article || '') : '',
-        errorMessage: cached ? '' : `Failed to load ISO Clause details: ${errorMessage}`
-      }));
-    }
   };
 
   const toDropdownOptions = (values: string[]): IDropdownOption[] =>
@@ -239,74 +181,12 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     text: `${c.ISOClause}${c.Article ? ' – ' + c.Article : ''}`
   }));
 
-  const isoChapterOptions: IDropdownOption[] = Array.from(
-    new Map(
-      state.isoClauses.map(c => [c.ISOlevel1 || c.ISOClause, c] as const)
-    ).entries()
-  ).map(([, c]) => ({
-    key: c.Id,
-    text: c.ISOlevel1 || c.ISOClause
+  const segmentServiceOptions: IDropdownOption[] = state.segmentServices.map(s => ({
+    key: s.Id,
+    text: `${s.Title} – ${s.Service}`
   }));
 
-  const isoArticleOptions: IDropdownOption[] = Array.from(
-    new Map(
-      state.isoClauses.map(c => [c.Article || c.ISOClause, c] as const)
-    ).entries()
-  ).map(([, c]) => ({
-    key: c.Id,
-    text: c.Article
-  }));
-
-  const segmentOptions: IDropdownOption[] = Array.from(
-    new Set(state.segmentServices.map(s => s.Title).filter(Boolean))
-  ).map(segment => ({
-    key: segment,
-    text: segment
-  }));
-
-  const serviceOptions: IDropdownOption[] = state.segmentServices
-    .filter(s => !state.formData.Segment || s.Title === state.formData.Segment)
-    .map(s => ({
-      key: s.Service || s.Title,
-      text: s.Service || s.Title
-    }));
-
-    const divisionOptions: IDropdownOption[] = state.segmentServices
-    .filter(s => !state.formData.Segment || s.Title === state.formData.Segment)
-    .map(s => ({
-      key: s.Division || s.Title,
-      text: s.Division || s.Title
-    }));
-
-
-  const getUserRoleOptions = (allowedRoles: string[]): IDropdownOption[] => Array.from(
-    new Map(
-      state.userRoles
-        .filter(r => r.AccountId && allowedRoles.indexOf(String(r.Role)) !== -1)
-        .map(r => [r.AccountId, r] as const)
-    ).values()
-  ).map(r => {
-    const user = state.usersById[r.AccountId];
-    const accountLabel = r.AccountStringId && r.AccountStringId.indexOf('|') !== -1
-      ? r.AccountStringId.split('|').pop()
-      : r.AccountStringId;
-
-    const text = user
-      ? `${user.Title}${user.Email ? ` (${user.Email})` : ''}`
-      : (accountLabel || `User ${r.AccountId}`);
-
-    return {
-      key: r.AccountId,
-      text
-    };
-  });
-
-  const picOptions: IDropdownOption[] = getUserRoleOptions(['PIC']);
-  const qualityManagerOptions: IDropdownOption[] = getUserRoleOptions(['Manager']);
-  const verifierOptions: IDropdownOption[] = getUserRoleOptions(['Verifier']);
-  const auditorOptions: IDropdownOption[] = getUserRoleOptions(['Auditor']);
   // ── Validation ────────────────────────────────────────────────────────────
-
   const validate = (): IValidationErrors => {
     const errs: IValidationErrors = {};
     const fd = state.formData;
@@ -317,33 +197,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     if (!fd.Status) {
       errs.Status = 'Status is required.';
     }
-    if (!fd.FindingType) {
-      errs.FindingType = 'Finding Type is required.';
-    }
-    if (!fd.ISOClauseId) {
-      errs.ISOClauseId = 'ISO Clause is required.';
-    }
-    if (!fd.Segment) {
-      errs.Segment = 'Segment is required.';
-    }
-    if (!fd.Service) {
-      errs.Service = 'Service is required.';
-    }
-    if (!fd.CategoryId) {
-      errs.CategoryId = 'Category is required.';
-    }
-    if (!fd.PICId) {
-      errs.PICId = 'PIC is required.';
-    }
-    if (!fd.AuditorId) {
-      errs.AuditorId = 'Auditor is required.';
-    }
-    if (!fd.AuditDate) {
-      errs.AuditDate = 'Audit Date is required.';
-    }
-    if (!fd.DueDate) {
-      errs.DueDate = 'Due Date is required.';
-    }
     if (!fd.FindingDescription || fd.FindingDescription.trim() === '') {
       errs.FindingDescription = 'Finding Description is required.';
     }
@@ -352,7 +205,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   };
 
   // ── Submit ────────────────────────────────────────────────────────────────
-
   const handleSubmit = async (): Promise<void> => {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
@@ -364,6 +216,9 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
 
     try {
       if (isEditMode && editItem) {
+        // The service payload builder strips read-only / calculated fields, so
+        // it is safe to send the full formData even though only a subset is
+        // editable by the PIC.
         await spService.updateAuditItem(editItem.Id, state.formData);
         setState(prev => ({
           ...prev,
@@ -381,17 +236,16 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
 
       setTimeout(() => onSaved(), 1200);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save audit item.';
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save audit item.';
       setState(prev => ({
         ...prev,
         isSaving: false,
-        errorMessage
+        errorMessage: `Save failed: ${errorMessage}`
       }));
     }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
-
   if (state.isLoading) {
     return (
       <div className={styles.formContainer}>
@@ -404,17 +258,28 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   const errs = state.errors;
   const ro = state.isReadOnly;
 
-  
+  // ══════════════════════════════════════════════════════════════════════════
+  //  PIC EDITABILITY MAP
+  //  `true`  → the field/section is disabled (read-only)
+  //  `ro`    → editable only when the PIC has update rights on this item
+  // ══════════════════════════════════════════════════════════════════════════
+  const sectionReadOnly = {
+    basicInfo: true,        // context only
+    classification: true,   // context only
+    people: true,           // context only
+    findingDetails: ro,     // ✔ PIC edits the finding
+    status: ro,             // ✔ PIC edits the Status field
+    dates: true,            // Action Status + dates are not PIC-editable
+    verification: ro        // ✔ PIC prepares verification & links
+  };
 
   return (
     <div className={styles.formContainer}>
       <div className={styles.formTitle}>
-        {isEditMode ? `Edit Audit Item – ${fd.Title || ''}` : 'Create New Audit Item'}
+        {`Audit Item – ${fd.Title || ''}`}
       </div>
       <div className={styles.formSubtitle}>
-        {isEditMode
-          ? 'Modify the audit finding details below.'
-          : 'Fill in the details to create a new audit finding.'}
+        PIC view – update the finding details, status and verification information.
       </div>
 
       {state.successMessage && (
@@ -427,10 +292,16 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           {state.errorMessage}
         </MessageBar>
       )}
-      {ro && (
+      {ro ? (
         <div className={styles.readOnlyBanner}>
           You do not have permission to edit this item. Displaying in read-only mode.
         </div>
+      ) : (
+        <MessageBar messageBarType={MessageBarType.info} isMultiline={true}>
+          As the PIC you can edit the <strong>Finding Details</strong>, the{' '}
+          <strong>Status</strong> field, and the <strong>Verification &amp; Links</strong>{' '}
+          section. All other sections are shown for context and are read-only.
+        </MessageBar>
       )}
 
       {/* ── Section 1: Basic Information ──────────────────────────────── */}
@@ -459,31 +330,25 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
             />
           </div>
           <div>
-            <Dropdown
+            <TextField
               label="Finding Type"
-              required
               disabled={ro}
-              selectedKey={fd.FindingType || undefined}
-              options={toDropdownOptions(Object.values(FindingType))}
-              onChange={(_, opt) => updateField('FindingType', opt?.key)}
-              errorMessage={errs.FindingType}
+              readOnly
+              value={fd.FindingType || ''}
             />
           </div>
           <div>
-            <Dropdown
+             <TextField
               label="Audit Type"
               disabled={ro}
-              selectedKey={fd.AuditType || undefined}
-              options={toDropdownOptions(Object.values(AuditType))}
-              onChange={(_, opt) => updateField('AuditType', opt?.key)}
-              placeholder="Select audit type"
+              readOnly
+              value={fd.AuditType || ''}
             />
           </div>
         </div>
         <div className={styles.fieldFull}>
           <RichTextEditor
             label="Finding Description"
-            required
             minHeight={160}
             disabled={ro}
             value={fd.FindingDescription}
@@ -497,15 +362,11 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         <h4>Classification</h4>
         <div className={styles.fieldRow}>
           <div>
-            <Dropdown
+            <TextField
               label="ISO Clause"
-              required
               disabled={ro}
-              selectedKey={fd.ISOClauseId || undefined}
-              options={isoClauseOptions}
-              onChange={(_, opt) => handleISOClauseChange(opt?.key as number | undefined)}
-              placeholder="Select ISO clause"
-              errorMessage={errs.ISOClauseId}
+              readOnly
+              value={fd.ISOClause.ISOClause || ''}
             />
           </div>
           <div>
@@ -513,9 +374,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Chapter"
               readOnly
               disabled
-              value={state.isoChapter}
-              placeholder="Auto-filled from ISO Clause"
-              description="Auto-populated from the selected ISO Clause (ISOlevel2)"
+              value={fd.ISOClause.ISOClause}
             />
           </div>
           <div>
@@ -523,9 +382,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Level"
               readOnly
               disabled
-              value={state.isoLevel}
-              placeholder="Auto-filled from ISO Clause"
-              description="Auto-populated from the selected ISO Clause (ISOlevel1)"
+              value={fd.ISOChapter.ISOlevel1}
             />
           </div>
           <div>
@@ -533,79 +390,37 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               label="Article"
               readOnly
               disabled
-              value={state.isoArticle}
-              placeholder="Auto-filled from ISO Clause"
-              description="Auto-populated from the selected ISO Clause"
+              value={fd.Article}
             />
-            {state.isLoadingISO && (
-              <div style={{ marginTop: 4 }}>
-                <Spinner size={SpinnerSize.xSmall} label="Loading ISO details..." labelPosition="right" />
-              </div>
-            )}
           </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <Dropdown
+            <TextField
               label="Segment"
-              required
-              disabled={ro}
-              selectedKey={fd.Segment || undefined}
-              options={segmentOptions}
-              onChange={(_, opt) => {
-                updateField('Segment', opt?.key);
-                updateField('Service', undefined);
-              }}
-              placeholder="Select segment"
-              errorMessage={errs.Segment}
+              readOnly
+              disabled
+              value={fd.Segment}
             />
           </div>
           <div>
-            <Dropdown
+            <TextField
               label="Service"
-              required
-              disabled={ro || !fd.Segment}
-              selectedKey={fd.Service || undefined}
-              options={serviceOptions}
-              onChange={(_, opt) => {
-                const selected = state.segmentServices.find(s => (s.Service || s.Title) === String(opt?.key));
-                updateField('Service', opt?.key);
-                updateField('Segment', selected ? selected.Title : fd.Segment);
-              }}
-              placeholder={fd.Segment ? 'Select service' : 'Select segment first'}
-              errorMessage={errs.Service}
+              readOnly
+              disabled
+              value={fd.Service}
             />
           </div>
           <div>
-            <Dropdown
+            <TextField
               label="Division"
-              required
-              disabled={ro || !fd.Segment}
-              selectedKey={fd.Division || undefined}
-              options={divisionOptions}
-              onChange={(_, opt) => {
-                const selected = state.segmentServices.find(s => (s.Division || s.Title) === String(opt?.key));
-                updateField('Division', opt?.key);
-                updateField('Segment', selected ? selected.Title : fd.Segment);
-              }}
-              placeholder={fd.Segment ? 'Select division' : 'Select segment first'}
-              errorMessage={errs.Division}
+              readOnly
+              disabled
+              value={fd.Division}
             />
           </div>
         </div>
-        {/* Dependent lookup values (read-only) */}
-        {isEditMode && (
-          <div className={styles.fieldRow}>
-            <div>
-              <Label>Segment (auto)</Label>
-              <span>{fd.Segment || '–'}</span>
-            </div>
-            <div>
-              <Label>Article (auto)</Label>
-              <span>{fd.Article || '–'}</span>
-            </div>
-          </div>
-        )}
+        
       </div>
 
       {/* ── Section 4: Finding Details ────────────────────────────────── */}
@@ -637,39 +452,29 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         <h4>People</h4>
         <div className={styles.fieldRow}>
           <div>
-            <Dropdown
+            <TextField
               label="PIC"
-              required
-              disabled={ro}
-              selectedKey={fd.PICId || undefined}
-              options={picOptions}
-              onChange={(_, opt) => updateField('PICId', opt?.key)}
-              placeholder="Select PIC user or Admin"
-              errorMessage={errs.PICId}
+              readOnly
+              disabled
+              value={fd.PIC.Title}
             />
           </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <Dropdown
+            <TextField
               label="Auditor"
-              required
-              disabled={ro}
-              selectedKey={fd.AuditorId || undefined}
-              options={auditorOptions}
-              onChange={(_, opt) => updateField('AuditorId', opt?.key)}
-              placeholder="Select Auditor or Admin"
-              errorMessage={errs.AuditorId}
+              readOnly
+              disabled
+              value={fd.Auditor.Title}
             />
           </div>
           <div>
-            <Dropdown
+            <TextField
               label="Verified by"
-              disabled={ro}
-              selectedKey={fd.VerifierId || undefined}
-              options={verifierOptions}
-              onChange={(_, opt) => updateField('VerifierId', opt?.key)}
-              placeholder="Select Verifier or Admin"
+              readOnly
+              disabled
+              value={fd.Verifier.Title}
             />
           </div>
         </div>
@@ -680,38 +485,21 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         <h4>Status &amp; Dates</h4>
         <div className={styles.fieldRow}>
           <div>
-            <Dropdown
+            <TextField
               label="Status"
-              required
-              disabled={ro}
-              selectedKey={fd.Status || undefined}
-              options={toDropdownOptions(Object.values(AuditStatus))}
-              onChange={(_, opt) => updateField('Status', opt?.key)}
-              errorMessage={errs.Status}
+              readOnly
+              disabled
+              value={fd.Status}
             />
           </div>
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <DatePicker
+            <TextField
               label="Audit Date"
-              isRequired={true}
-              disabled={ro}
-              value={fd.AuditDate ? new Date(fd.AuditDate) : undefined}
-              onSelectDate={(date) => updateField('AuditDate', date ? date.toISOString() : '')}
-              placeholder="Select audit date"
-              textField={{ errorMessage: errs.AuditDate }}
-            />
-          </div>
-          <div>
-            <DatePicker
-              label="Due Date"
-              isRequired={true}
-              disabled={ro}
-              value={fd.DueDate ? new Date(fd.DueDate) : undefined}
-              onSelectDate={(date) => updateField('DueDate', date ? date.toISOString() : '')}
-              placeholder="Select due date"
-              textField={{ errorMessage: errs.DueDate }}
+              readOnly
+              disabled
+              value={fd.AuditDate}
             />
           </div>
         </div>
@@ -781,12 +569,12 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         </div>
       )}
 
-      {/* ── Action buttons ────────────────────────────────────────────── */}
+      {/* ── Action buttons ──────────────────────────────────────────────── */}
       {!ro && (
         <div className={styles.buttonBar}>
           <DefaultButton text="Cancel" onClick={onCancel} disabled={state.isSaving} />
           <PrimaryButton
-            text={state.isSaving ? 'Saving...' : (isEditMode ? 'Update Item' : 'Create Item')}
+            text={state.isSaving ? 'Saving...' : 'Update Item'}
             onClick={handleSubmit}
             disabled={state.isSaving}
           />
@@ -801,4 +589,4 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   );
 };
 
-export default AuditItemForm;
+export default PIC_Detail;

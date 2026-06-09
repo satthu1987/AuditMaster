@@ -29,6 +29,19 @@ const Sidebar: React.FC<ISidebarProps> = (props) => {
         .toUpperCase()
     : '?';
 
+  // Short description of the active view, keyed by role. This keeps the sidebar
+  // in sync with the role-based view architecture (each role is routed to its
+  // own dedicated view component in AuditMaster).
+  const roleDescriptions: { [role: string]: string } = {
+    Admin: 'Full access workspace',
+    PIC: 'My assigned audits',
+    'Quality Manager': 'Oversight & review',
+    Verifier: 'Verification queue',
+    Auditor: 'Read-only access',
+    Viewer: 'Read-only access'
+  };
+  const roleDescription = roleDescriptions[currentUser.role] || 'Read-only access';
+
   return (
     <div className={`${styles.sidebar} ${collapsed ? styles.collapsed : styles.expanded}`}>
       {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -48,9 +61,14 @@ const Sidebar: React.FC<ISidebarProps> = (props) => {
         </button>
       </div>
 
-      {/* ── Role Badge ─────────────────────────────────────────────────── */}
+      {/* ── Role Badge + active-view description ────────────────────────── */}
       {!collapsed && (
-        <div className={styles.roleTag}>{currentUser.role}</div>
+        <div className={styles.roleTag} title={roleDescription}>
+          {currentUser.role}
+          <span style={{ display: 'block', fontWeight: 400, fontSize: 11, opacity: 0.85, marginTop: 2 }}>
+            {roleDescription}
+          </span>
+        </div>
       )}
 
       {/* ── Menu Items ─────────────────────────────────────────────────── */}

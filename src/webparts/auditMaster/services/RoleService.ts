@@ -77,7 +77,7 @@ export class RoleService {
         }
         // Fallback: verifier with no explicit segment restriction can verify
         // items in "Pending Verification" status
-        return item.Status === 'Pending Verification';
+        return item.Status === 'Verification';
 
       default:
         return false; // Viewer – read only

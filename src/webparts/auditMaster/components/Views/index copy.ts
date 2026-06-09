@@ -12,4 +12,3 @@ export { default as PICView } from './PICView';
 export { default as ManagerView } from './ManagerView';
 export { default as VerifierView } from './VerifierView';
 export { default as ViewerView } from './ViewerView';
-

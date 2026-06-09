@@ -125,10 +125,9 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
     switch (status) {
       case AuditStatus.Open: return styles.open;
       case AuditStatus.InProgress: return styles.inProgress;
-      case AuditStatus.PendingVerification: return styles.pendingVerification;
+      case AuditStatus.Verification: return styles.pendingVerification;
       case AuditStatus.Closed: return styles.closed;
-      case AuditStatus.Overdue: return styles.overdue;
-      case AuditStatus.Cancelled: return styles.cancelled;
+      case AuditStatus.VerificationOverdue: return styles.overdue;
       default: return '';
     }
   };
@@ -191,7 +190,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
           <div className={styles.statLabel}>In Progress</div>
         </div>
         <div className={`${styles.statCard} ${styles.pending}`}>
-          <div className={styles.statValue}>{countByStatus(AuditStatus.PendingVerification)}</div>
+          <div className={styles.statValue}>{countByStatus(AuditStatus.Verification)}</div>
           <div className={styles.statLabel}>Pending</div>
         </div>
         <div className={`${styles.statCard} ${styles.closed}`}>
@@ -199,7 +198,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
           <div className={styles.statLabel}>Closed</div>
         </div>
         <div className={`${styles.statCard} ${styles.overdue}`}>
-          <div className={styles.statValue}>{countByStatus(AuditStatus.Overdue)}</div>
+          <div className={styles.statValue}>{countByStatus(AuditStatus.VerificationOverdue)}</div>
           <div className={styles.statLabel}>Overdue</div>
         </div>
       </div>

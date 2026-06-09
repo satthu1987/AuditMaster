@@ -7,8 +7,6 @@ import {
   AuditStatus,
   FindingType,
   VerificationResult,
-  InternalExternal,
-  RegionChoices,
   UserRole,
   QLVerification
 } from '../models';
@@ -194,7 +192,7 @@ export class ListProvisioningService {
     // 2. PIC
     await this._addPersonField(listTitle, 'PIC');
     // 9. Quality Manager
-    await this._addPersonField(listTitle, 'Quality Manager');
+    //await this._addPersonField(listTitle, 'Quality Manager');
     // 10. Auditor
     await this._addPersonField(listTitle, 'Auditor');
     // 22. Verified by
@@ -214,11 +212,11 @@ export class ListProvisioningService {
       false
     );
     // 5. Region
-    await this._addChoiceField(
+   /*  await this._addChoiceField(
       listTitle, 'Region',
       RegionChoices,
       false
-    );
+    ); */
     // 16. Verification Result
     await this._addChoiceField(
       listTitle, 'Verification Result',
@@ -226,11 +224,11 @@ export class ListProvisioningService {
       false, VerificationResult.No
     );
     // 17. Internal/External
-    await this._addChoiceField(
+    /* await this._addChoiceField(
       listTitle, 'Internal/External',
       Object.values(InternalExternal),
       false
-    );
+    ); */
     // 34. Q&L verification
     await this._addChoiceField(
       listTitle,
@@ -252,7 +250,7 @@ export class ListProvisioningService {
 
     // ── Yes/No field ────────────────────────────────────────────────────────
     // 12. Required RCA
-    await this._addBooleanField(listTitle, 'Required RCA', false);
+   // await this._addBooleanField(listTitle, 'Required RCA', false);
 
     // ── Date and Time fields ────────────────────────────────────────────────
     // 15. DueDate
@@ -262,7 +260,7 @@ export class ListProvisioningService {
     // 23. VerificationDate
     await this._addDateField(listTitle, 'VerificationDate', false);
     // 27. Closed Date
-    await this._addDateField(listTitle, 'Closed Date', false);
+    //await this._addDateField(listTitle, 'Closed Date', false);
 
     // ── Single line of text fields ──────────────────────────────────────────
     // 19. PIONumber
