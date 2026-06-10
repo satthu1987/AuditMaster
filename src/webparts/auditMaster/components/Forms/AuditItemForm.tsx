@@ -770,13 +770,12 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <RichTextEditor
+            <TextField
               label="Evidence (link) – URL"
               disabled={ro}
               value={fd.EvidenceLink?.Url || ''}
-              onChange={(html: string) => updateField('EvidenceLink', { Url: html || '', Description: html || '' })}
+              onChange={(_, v) => updateField('EvidenceLink', { Url: (v || '').trim(), Description: (v || '').trim() })}
               placeholder="https://..."
-              minHeight={168}
             />
           </div>
         </div>

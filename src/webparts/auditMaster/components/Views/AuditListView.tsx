@@ -253,6 +253,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
                 <th>PIC</th>
                 <th>Service</th>
                 <th>Segment</th>
+                <th>Division</th>
                 <th>Audit Date</th>
                 <th>Due Date</th>
                 <th>Actions</th>
@@ -271,6 +272,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
                   <td>{item.PIC?.Title || (item.PICId ? `User #${item.PICId}` : '–')}</td>
                   <td>{item.Service || '–'}</td>
                   <td>{item.Segment || '–'}</td>
+                  <td>{item.Division || '–'}</td>
                   <td>{formatDate(item.AuditDate)}</td>
                   <td>{formatDate(item.DueDate)}</td>
                   <td>

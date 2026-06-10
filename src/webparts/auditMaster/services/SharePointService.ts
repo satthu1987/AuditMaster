@@ -197,6 +197,7 @@ export class SharePointService {
   private _findingIdFieldEntityName: string = 'FindingId';
   private _auditTypeFieldEntityName: string = 'AuditType';
   private _verifierFieldEntityName: string = 'Verifier';
+  private _rcDescriptionFieldInternalName: string = 'RCdescription';
   private _serviceFieldResolved: boolean = false;
 
   private _isServiceLookup(): boolean {
@@ -209,8 +210,8 @@ export class SharePointService {
     }
 
     try {
-      const data = await this._get<{ value: Array<{ Title?: string; InternalName?: string; EntityPropertyName?: string; TypeAsString?: string }> }>(
-        `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/fields?$select=Title,InternalName,EntityPropertyName,TypeAsString`
+      const data = await this._get<{ value: Array<{ Title?: string; InternalName?: string; EntityPropertyName?: string; TypeAsString?: string; ReadOnlyField?: boolean; Hidden?: boolean; Sealed?: boolean }> }>(
+        `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/fields?$select=Title,InternalName,EntityPropertyName,TypeAsString,ReadOnlyField,Hidden,Sealed`
       );
       const serviceField = data.value.find(f => (f.Title || '').toLowerCase() === 'service');
       if (serviceField) {
@@ -232,8 +233,11 @@ export class SharePointService {
       }
 
       const normalize = (value?: string): string => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      const isWritableField = (field: { TypeAsString?: string }): boolean => {
+      const isWritableField = (field: { TypeAsString?: string; ReadOnlyField?: boolean; Hidden?: boolean; Sealed?: boolean }): boolean => {
         const type = normalize(field.TypeAsString);
+        if (field.ReadOnlyField || field.Hidden || field.Sealed) {
+          return false;
+        }
         return type !== 'calculated' && type !== 'computed' && type !== 'counter';
       };
 
@@ -244,6 +248,7 @@ export class SharePointService {
       const findingLegacyNames = new Set(['findingnumber']);
       const auditTypeNames = new Set(['audittype', 'internalexternal', 'internalx002fexternal']);
       const verifierNames = new Set(['verifier', 'verifiedby', 'verifiedx0020by']);
+      const rcDescriptionNames = new Set(['rcdescription', 'rcx0020description', 'rootcause', 'rootcausedescription']);
 
       const qlVerificationField = data.value.find(f => {
         const title = normalize(f.Title);
@@ -343,6 +348,19 @@ export class SharePointService {
       if (verifierField) {
         this._verifierFieldEntityName = (verifierField.EntityPropertyName || verifierField.InternalName || 'Verifier').replace(/Id$/, '');
       }
+
+      const rcDescriptionField = data.value.find(f => {
+        if (!isWritableField(f)) {
+          return false;
+        }
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return rcDescriptionNames.has(title) || rcDescriptionNames.has(internal) || rcDescriptionNames.has(entity);
+      });
+      if (rcDescriptionField) {
+        this._rcDescriptionFieldInternalName = rcDescriptionField.InternalName || rcDescriptionField.EntityPropertyName || 'RCdescription';
+      }
     } catch (e) {
       console.warn('[SharePointService] Could not resolve Service field metadata, using defaults.', e);
     }
@@ -369,7 +387,8 @@ export class SharePointService {
       'ISOClauseId', serviceSelectName,
       'CategoryId',
       'Article',
-      'Segment',
+      this._segmentFieldInternalName,
+      this._divisionFieldInternalName,
       'Year', this._findingIdFieldEntityName, 'VerificationDateCalculated',
       'Created', 'Modified'
     ].join(',');
@@ -695,7 +714,7 @@ export class SharePointService {
     if (item.FindingDescription !== undefined) payload.FindingDescription = item.FindingDescription;
     if (item.QuickFix !== undefined) payload.QuickFix = item.QuickFix;
     if (item.ActionTaken !== undefined) payload.ActionTaken = item.ActionTaken;
-    if (item.RCDescription !== undefined) payload.RCdescription = item.RCDescription;
+    if (item.RCDescription !== undefined) payload[this._rcDescriptionFieldInternalName] = item.RCDescription;
 
     // Date fields
     if (item.DueDate !== undefined) payload.DueDate = item.DueDate;
