@@ -185,10 +185,18 @@ export class SharePointService {
   private _serviceFieldInternalName: string = 'Service';
   private _serviceFieldEntityName: string = 'Service';
   private _serviceFieldType: string = 'Text';
+  private _segmentFieldInternalName: string = 'Segment';
+  private _segmentFieldType: string = 'Text';
+  private _divisionFieldInternalName: string = 'Division';
+  private _divisionFieldType: string = 'Text';
   private _isoClauseFieldEntityName: string = 'ISOClause';
+  private _isoChapterFieldEntityName: string = 'ISOChapter';
+  private _isoChapterFieldInternalName: string = 'ISOChapter';
+  private _isoChapterFieldType: string = 'Lookup';
   private _qlVerificationFieldEntityName: string = 'QLVerification';
   private _findingIdFieldEntityName: string = 'FindingId';
   private _auditTypeFieldEntityName: string = 'AuditType';
+  private _verifierFieldEntityName: string = 'Verifier';
   private _serviceFieldResolved: boolean = false;
 
   private _isServiceLookup(): boolean {
@@ -211,6 +219,18 @@ export class SharePointService {
         this._serviceFieldType = serviceField.TypeAsString || 'Text';
       }
 
+      const segmentField = data.value.find(f => (f.Title || '').toLowerCase() === 'segment');
+      if (segmentField) {
+        this._segmentFieldInternalName = segmentField.InternalName || 'Segment';
+        this._segmentFieldType = segmentField.TypeAsString || 'Text';
+      }
+
+      const divisionField = data.value.find(f => (f.Title || '').toLowerCase() === 'division');
+      if (divisionField) {
+        this._divisionFieldInternalName = divisionField.InternalName || 'Division';
+        this._divisionFieldType = divisionField.TypeAsString || 'Text';
+      }
+
       const normalize = (value?: string): string => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const isWritableField = (field: { TypeAsString?: string }): boolean => {
         const type = normalize(field.TypeAsString);
@@ -219,9 +239,11 @@ export class SharePointService {
 
       const qlNames = new Set(['qlverification', 'qx0026lverification']);
       const isoNames = new Set(['isoclause']);
+      const isoChapterNames = new Set(['isochapter', 'findingisochapter', 'findingx0020isox0020chapter']);
       const findingIdNames = new Set(['findingid', 'findingx0020id']);
       const findingLegacyNames = new Set(['findingnumber']);
       const auditTypeNames = new Set(['audittype', 'internalexternal', 'internalx002fexternal']);
+      const verifierNames = new Set(['verifier', 'verifiedby', 'verifiedx0020by']);
 
       const qlVerificationField = data.value.find(f => {
         const title = normalize(f.Title);
@@ -243,6 +265,36 @@ export class SharePointService {
         this._isoClauseFieldEntityName = (isoClauseField.EntityPropertyName || isoClauseField.InternalName || 'ISOClause').replace(/Id$/, '');
       }
 
+      let isoChapterField = data.value.find(f => {
+        if (!isWritableField(f)) {
+          return false;
+        }
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return isoChapterNames.has(title) || isoChapterNames.has(internal) || isoChapterNames.has(entity);
+      });
+      if (!isoChapterField) {
+        isoChapterField = data.value.find(f => {
+          if (!isWritableField(f)) {
+            return false;
+          }
+          const type = normalize(f.TypeAsString);
+          const title = normalize(f.Title);
+          const internal = normalize(f.InternalName);
+          const entity = normalize(f.EntityPropertyName);
+          const isLookup = type === 'lookup' || type === 'lookupmulti';
+          const hasIso = title.indexOf('iso') !== -1 || internal.indexOf('iso') !== -1 || entity.indexOf('iso') !== -1;
+          const hasChapter = title.indexOf('chapter') !== -1 || internal.indexOf('chapter') !== -1 || entity.indexOf('chapter') !== -1;
+          return isLookup && hasIso && hasChapter;
+        });
+      }
+      if (isoChapterField) {
+        this._isoChapterFieldEntityName = (isoChapterField.EntityPropertyName || isoChapterField.InternalName || 'ISOChapter').replace(/Id$/, '');
+        this._isoChapterFieldInternalName = isoChapterField.InternalName || 'ISOChapter';
+        this._isoChapterFieldType = isoChapterField.TypeAsString || 'Lookup';
+      }
+
       const findingIdField = data.value.find(f => {
         if (!isWritableField(f)) {
           return false;
@@ -253,7 +305,7 @@ export class SharePointService {
         return findingIdNames.has(title) || findingIdNames.has(internal) || findingIdNames.has(entity);
       });
       if (findingIdField) {
-        this._findingIdFieldEntityName = findingIdField.EntityPropertyName || findingIdField.InternalName || 'FindingId';
+        this._findingIdFieldEntityName = findingIdField.InternalName || findingIdField.EntityPropertyName || 'FindingId';
       } else {
         const legacyCalculatedField = data.value.find(f => {
           const title = normalize(f.Title);
@@ -277,6 +329,19 @@ export class SharePointService {
       });
       if (auditTypeField) {
         this._auditTypeFieldEntityName = auditTypeField.EntityPropertyName || auditTypeField.InternalName || 'AuditType';
+      }
+
+      const verifierField = data.value.find(f => {
+        if (!isWritableField(f)) {
+          return false;
+        }
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return verifierNames.has(title) || verifierNames.has(internal) || verifierNames.has(entity);
+      });
+      if (verifierField) {
+        this._verifierFieldEntityName = (verifierField.EntityPropertyName || verifierField.InternalName || 'Verifier').replace(/Id$/, '');
       }
     } catch (e) {
       console.warn('[SharePointService] Could not resolve Service field metadata, using defaults.', e);
@@ -645,9 +710,23 @@ export class SharePointService {
     // Person field IDs
     if (item.PICId !== undefined) payload.PICId = item.PICId;
     if (item.AuditorId !== undefined) payload.AuditorId = item.AuditorId;
+    if (item.VerifierId !== undefined) payload[`${this._verifierFieldEntityName}Id`] = item.VerifierId;
 
     // Lookup IDs (primary lookups only – dependent lookups are read-only)
     if (item.ISOClauseId !== undefined) payload[`${this._isoClauseFieldEntityName}Id`] = item.ISOClauseId;
+    if (item.ISOChapterId !== undefined) {
+      if (this._isoChapterFieldType === 'Lookup' || this._isoChapterFieldType === 'LookupMulti') {
+        payload[`${this._isoChapterFieldEntityName}Id`] = item.ISOChapterId;
+      } else {
+        payload[this._isoChapterFieldInternalName] = item.ISOChapterId;
+      }
+    } else if (item.ISOClauseId !== undefined) {
+      if (this._isoChapterFieldType === 'Lookup' || this._isoChapterFieldType === 'LookupMulti') {
+        payload[`${this._isoChapterFieldEntityName}Id`] = item.ISOClauseId;
+      } else {
+        payload[this._isoChapterFieldInternalName] = item.ISOClauseId;
+      }
+    }
     if (item.CategoryId !== undefined) payload.CategoryId = item.CategoryId;
 
     // Service supports both Text and Lookup list designs
@@ -656,6 +735,14 @@ export class SharePointService {
     }
     if (item.ServiceId !== undefined && this._isServiceLookup()) {
       payload[`${this._serviceFieldEntityName}Id`] = item.ServiceId;
+    }
+
+    // Segment/Division can be either text or lookup depending on list design
+    if (item.Segment !== undefined) {
+      payload[this._segmentFieldInternalName] = item.Segment;
+    }
+    if (item.Division !== undefined) {
+      payload[this._divisionFieldInternalName] = item.Division;
     }
 
     // NOTE: Dependent lookups (#8 Segment, #31 Article, #33 Division) are read-only.
