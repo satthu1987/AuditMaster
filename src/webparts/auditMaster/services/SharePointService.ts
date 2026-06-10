@@ -181,62 +181,94 @@ export class SharePointService {
   //  Audit Master List – READ
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // Select fields using SharePoint REST API internal names.
-  // Person fields use the "Id" suffix; lookup fields use "Id" suffix for the FK.
-  // Dependent lookups (Segment, Article, Division) are read-only projected fields.
-   private readonly _auditSelectFields: string = [
-    'Id', 'Title',
-    // Person field IDs
-    'PICId', 'QualityManagerId', 'AuditorId', 'VerifierId',
-    // Choice fields
-    'Status', 'FindingType', 'Region',
-    'VerificationResult', 'InternalExternal',
-    'ActionStatus', 'QLVerification',
-    // Text / Note fields
-    'FindingDescription', 'QuickFix', 'ActionTaken',
-    'RCDescription', 'PIONumber',
-    // Dates
-    'DueDate', 'AuditDate', 'VerificationDate', 'ClosedDate',
-    // Hyperlink fields
-    'EvidenceLink', 
-    // Lookup IDs (primary lookups)
-    'ISOClauseId', 'ServiceId',
-    'CategoryId',
-    // #30 ISOClause for Article_lookup – separate primary lookup ID
-    'Article',
-    // Dependent lookups (projected values, read-only)
-    'Segment',   // #8  dependent from Service (#7)
-    // Calculated
-    'Year', 'FindingNumber', 'VerificationDateCalculated',
-    // System
-    'Created', 'Modified'
-  ].join(',');
+  private _serviceFieldInternalName: string = 'Service';
+  private _serviceFieldEntityName: string = 'Service';
+  private _serviceFieldType: string = 'Text';
+  private _serviceFieldResolved: boolean = false;
 
-  // Expand person and primary lookup fields to get sub-properties
-  private readonly _auditExpandFields: string = [
-    'PIC', 'QualityManager', 'Auditor', 'Verifier',
-    'ISOClause', 'Service',
-    'FindingISOChapter', 'Category',
-    'ISOClauseforArticle_lookup',
-    'Service_Lookup'
-  ].join(',');
+  private _isServiceLookup(): boolean {
+    return this._serviceFieldType === 'Lookup' || this._serviceFieldType === 'LookupMulti';
+  }
 
-  private readonly _auditExpandSelect: string = [
-    'PIC/Id', 'PIC/Title', 'PIC/EMail',
-    'QualityManager/Id', 'QualityManager/Title', 'QualityManager/EMail',
-    'Auditor/Id', 'Auditor/Title', 'Auditor/EMail',
-    'Verifier/Id', 'Verifier/Title', 'Verifier/EMail',
-    // ISO clause lookup → pull every display column we surface in the form
-    // (ISOClause text + the ISO level / article columns used for auto-fill).
-    'ISOClause/Id', 'ISOClause/ISOClause',
-    'ISOClause/ISOlevel1', 'ISOClause/ISOlevel2',
-    'ISOClause/Article',
-    'Service/Id', 'Service/Service',
-    'FindingISOChapter/Id', 'FindingISOChapter/ISOClause',
-    'Category/Id', 'Category/Category',
-    'ISOClauseforArticle_lookup/Id', 'ISOClauseforArticle_lookup/ISOClause',
-    'Service_Lookup/Id', 'Service_Lookup/Title'
-  ].join(',');
+  private async _ensureAuditServiceFieldNames(): Promise<void> {
+    if (this._serviceFieldResolved) {
+      return;
+    }
+
+    try {
+      const data = await this._get<{ value: Array<{ Title?: string; InternalName?: string; EntityPropertyName?: string; TypeAsString?: string }> }>(
+        `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/fields?$select=Title,InternalName,EntityPropertyName,TypeAsString`
+      );
+      const serviceField = data.value.find(f => (f.Title || '').toLowerCase() === 'service');
+      if (serviceField) {
+        this._serviceFieldInternalName = serviceField.InternalName || 'Service';
+        this._serviceFieldEntityName = (serviceField.EntityPropertyName || serviceField.InternalName || 'Service').replace(/Id$/, '');
+        this._serviceFieldType = serviceField.TypeAsString || 'Text';
+      }
+    } catch (e) {
+      console.warn('[SharePointService] Could not resolve Service field metadata, using defaults.', e);
+    }
+
+    this._serviceFieldResolved = true;
+  }
+
+  private _auditSelectFields(): string {
+    const serviceSelectName = this._isServiceLookup()
+      ? `${this._serviceFieldEntityName}Id`
+      : this._serviceFieldEntityName;
+
+    return [
+      'Id', 'Title',
+      'PICId', 'QualityManagerId', 'AuditorId', 'VerifierId',
+      'Status', 'FindingType', 'Region',
+      'VerificationResult', 'InternalExternal',
+      'QLVerification',
+      'FindingDescription', 'QuickFix', 'ActionTaken',
+      'RCDescription', 'PIONumber',
+      'DueDate', 'AuditDate', 'VerificationDate', 'ClosedDate',
+      'EvidenceLink',
+      'ISOClauseId', serviceSelectName,
+      'CategoryId',
+      'Article',
+      'Segment',
+      'Year', 'FindingNumber', 'VerificationDateCalculated',
+      'Created', 'Modified'
+    ].join(',');
+  }
+
+  private _auditExpandFields(): string {
+    const fields: string[] = [
+      'PIC', 'QualityManager', 'Auditor', 'Verifier',
+      'ISOClause',
+      'FindingISOChapter', 'Category',
+      'ISOClauseforArticle_lookup',
+      'Service_Lookup'
+    ];
+    if (this._isServiceLookup()) {
+      fields.splice(6, 0, this._serviceFieldEntityName);
+    }
+    return fields.join(',');
+  }
+
+  private _auditExpandSelect(): string {
+    const fields: string[] = [
+      'PIC/Id', 'PIC/Title', 'PIC/EMail',
+      'QualityManager/Id', 'QualityManager/Title', 'QualityManager/EMail',
+      'Auditor/Id', 'Auditor/Title', 'Auditor/EMail',
+      'Verifier/Id', 'Verifier/Title', 'Verifier/EMail',
+      'ISOClause/Id', 'ISOClause/ISOClause',
+      'ISOClause/ISOlevel1', 'ISOClause/ISOlevel2',
+      'ISOClause/Article',
+      'FindingISOChapter/Id', 'FindingISOChapter/ISOClause',
+      'Category/Id', 'Category/Category',
+      'ISOClauseforArticle_lookup/Id', 'ISOClauseforArticle_lookup/ISOClause',
+      'Service_Lookup/Id', 'Service_Lookup/Title'
+    ];
+    if (this._isServiceLookup()) {
+      fields.splice(16, 0, `${this._serviceFieldEntityName}/Id`, `${this._serviceFieldEntityName}/Service`);
+    }
+    return fields.join(',');
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   //  Lookup-expansion helpers
@@ -256,14 +288,14 @@ export class SharePointService {
   /** Build the query-string for the fully-expanded audit item read. */
   private _auditExpandedQuery(): string {
     return (
-      `?$select=${this._auditSelectFields},${this._auditExpandSelect}` +
-      `&$expand=${this._auditExpandFields}`
+      `?$select=${this._auditSelectFields()},${this._auditExpandSelect()}` +
+      `&$expand=${this._auditExpandFields()}`
     );
   }
 
   /** Build the query-string for the base (no-lookup-expansion) fallback read. */
   private _auditBaseQuery(): string {
-    return `?$select=${this._auditSelectFields}`;
+    return `?$select=${this._auditSelectFields()}`;
   }
 
   /**
@@ -302,6 +334,7 @@ export class SharePointService {
     context: string,
     filter: string
   ): Promise<IAuditMasterItem[]> {
+    await this._ensureAuditServiceFieldNames();
     const base = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items`;
     const tail = `${filter}&$orderby=Modified desc&$top=500`;
     const expandedUrl = `${base}${this._auditExpandedQuery()}${tail}`;
@@ -348,10 +381,25 @@ export class SharePointService {
   public async getAuditItemsForVerifier(
     segmentServiceIds: number[]
   ): Promise<IAuditMasterItem[]> {
+    await this._ensureAuditServiceFieldNames();
     let filter = '';
     if (segmentServiceIds.length > 0) {
-      const conditions = segmentServiceIds.map(id => `ServiceId eq ${id}`);
-      filter = `&$filter=(${conditions.join(' or ')}) and (Status eq 'Pending Verification')`;
+      if (this._isServiceLookup()) {
+        const conditions = segmentServiceIds.map(id => `${this._serviceFieldEntityName}Id eq ${id}`);
+        filter = `&$filter=(${conditions.join(' or ')}) and (Status eq 'Pending Verification')`;
+      } else {
+        const segmentServices = await this.getSegmentServices();
+        const serviceNames = segmentServices
+          .filter(s => segmentServiceIds.indexOf(s.Id) !== -1)
+          .map(s => (s.Service || s.Title || '').trim())
+          .filter(s => s.length > 0);
+        if (serviceNames.length > 0) {
+          const conditions = serviceNames.map(name => `${this._serviceFieldEntityName} eq '${name.replace(/'/g, "''")}'`);
+          filter = `&$filter=(${conditions.join(' or ')}) and (Status eq 'Pending Verification')`;
+        } else {
+          filter = `&$filter=Status eq 'Pending Verification'`;
+        }
+      }
     } else {
       filter = `&$filter=Status eq 'Pending Verification'`;
     }
@@ -365,6 +413,7 @@ export class SharePointService {
    * names are visible for debugging "blank lookup" issues.
    */
   public async getAuditItemById(itemId: number): Promise<IAuditMasterItem> {
+    await this._ensureAuditServiceFieldNames();
     const base = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${itemId})`;
     const expandedUrl = `${base}${this._auditExpandedQuery()}`;
 
@@ -396,6 +445,7 @@ export class SharePointService {
    * Create a new Audit Master item. Returns the created item.
    */
   public async createAuditItem(item: Partial<IAuditMasterItem>): Promise<IAuditMasterItem> {
+    await this._ensureAuditServiceFieldNames();
     const payload = this._buildAuditPayload(item);
     const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items`;
     return this._post<IAuditMasterItem>(url, payload);
@@ -405,6 +455,7 @@ export class SharePointService {
    * Update an existing Audit Master item.
    */
   public async updateAuditItem(itemId: number, item: Partial<IAuditMasterItem>): Promise<void> {
+    await this._ensureAuditServiceFieldNames();
     const payload = this._buildAuditPayload(item);
     const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items(${itemId})`;
     await this._merge(url, payload);
@@ -449,8 +500,15 @@ export class SharePointService {
 
     // Lookup IDs (primary lookups only – dependent lookups are read-only)
     if (item.ISOClauseId !== undefined) payload.ISOclauseId = item.ISOClauseId;
-    if (item.ServiceId !== undefined) payload.ServiceId = item.ServiceId;
     if (item.CategoryId !== undefined) payload.CategoryId = item.CategoryId;
+
+    // Service supports both Text and Lookup list designs
+    if (item.Service !== undefined && !this._isServiceLookup()) {
+      payload[this._serviceFieldInternalName] = item.Service;
+    }
+    if (item.ServiceId !== undefined && this._isServiceLookup()) {
+      payload[`${this._serviceFieldEntityName}Id`] = item.ServiceId;
+    }
 
     // NOTE: Dependent lookups (#8 Segment, #31 Article, #33 Division) are read-only.
     // NOTE: Calculated fields (#25 Year, #26 FindingNumber, #34 VerificationDateCalculated) are read-only.
