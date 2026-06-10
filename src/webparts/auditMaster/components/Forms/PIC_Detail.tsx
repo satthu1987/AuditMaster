@@ -250,6 +250,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
   const fd = state.formData;
   const errs = state.errors;
   const ro = state.isReadOnly;
+  const selectedISOClause = state.isoClauses.find(c => c.Id === (fd.ISOClauseId || (fd as Partial<IAuditMasterItem> & { ISO_x0020_clauseId?: number }).ISO_x0020_clauseId));
 
   // ══════════════════════════════════════════════════════════════════════════
   //  PIC EDITABILITY MAP
@@ -359,7 +360,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Clause"
               disabled={ro}
               readOnly
-              value={fd?.ISOClause?.ISOClause || ''}
+              value={selectedISOClause?.ISOClause || fd?.ISOClause?.ISOClause || ''}
             />
           </div>
           <div>
@@ -367,7 +368,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Chapter"
               readOnly
               disabled
-              value={state.isoChapter || fd?.ISOClause?.ISOlevel1 || ''}
+              value={state.isoChapter || selectedISOClause?.ISOlevel2 || fd?.ISOClause?.ISOlevel2 || ''}
             />
           </div>
           <div>
@@ -375,7 +376,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Level"
               readOnly
               disabled
-              value={state.isoLevel || fd?.ISOClause?.ISOlevel2 || ''}
+              value={state.isoLevel || selectedISOClause?.ISOlevel1 || fd?.ISOClause?.ISOlevel1 || ''}
             />
           </div>
           <div>
@@ -383,7 +384,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Article"
               readOnly
               disabled
-              value={fd?.Article || state.isoArticle || fd?.ISOClause?.Article || ''}
+              value={fd?.Article || state.isoArticle || selectedISOClause?.Article || fd?.ISOClause?.Article || ''}
             />
           </div>
         </div>
