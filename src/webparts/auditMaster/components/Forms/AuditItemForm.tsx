@@ -120,7 +120,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           )
         );
 
-       
+
 
         // Pre-populate derived ISO Clause fields when editing an existing item
         let isoChapter = '';
@@ -171,7 +171,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     }));
   };
 
- // ── Cascading ISO Clause selection ─────────────────────────────────────────
+  // ── Cascading ISO Clause selection ─────────────────────────────────────────
   // When the ISO Clause changes, fetch the full ISOClause list item and
   // auto-populate the read-only ISO Chapter (ISOlevel2), ISO Level (ISOlevel1)
   // and Article fields. Clearing the clause resets all three.
@@ -179,8 +179,8 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     // Update the lookup id first
     setState(prev => ({
       ...prev,
-      formData: { ...prev.formData, ISO_x0020_clauseId: clauseId as number },
-      errors: { ...prev.errors, ISO_x0020_clauseId: '' },
+      formData: { ...prev.formData, ISOClauseId: clauseId as number },
+      errors: { ...prev.errors, ISOClauseId: '' },
       successMessage: '',
       errorMessage: ''
     }));
@@ -194,7 +194,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         isoLevel: '',
         isoArticle: '',
         isLoadingISO: false,
-        formData: { ...prev.formData, ISO_x0020_clauseId: undefined as any }
+        formData: { ...prev.formData, ISOClauseId: undefined as any }
       }));
       return;
     }
@@ -271,7 +271,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
       text: s.Service || s.Title
     }));
 
-    const divisionOptions: IDropdownOption[] = Array.from(
+  const divisionOptions: IDropdownOption[] = Array.from(
     new Set(
       state.segmentServices
         .filter(s => !state.formData.Segment || s.Title === state.formData.Segment)
@@ -334,9 +334,9 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     if (!fd.Service) {
       errs.Service = 'Service is required.';
     }
-    if (!fd.CategoryId) {
-      errs.CategoryId = 'Category is required.';
-    }
+    // if (!fd.CategoryId) {
+    //   errs.CategoryId = 'Category is required.';
+    // }
     if (!fd.PICId) {
       errs.PICId = 'PIC is required.';
     }
@@ -359,15 +359,18 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (): Promise<void> => {
+    console.log('Submitting form with data:', state.formData);
     const errs = validate();
     if (Object.keys(errs).length > 0) {
+      console.log('Validation errors:', errs);
       setState(prev => ({ ...prev, errors: errs }));
       return;
     }
-
+    console.log('Validation passed, proceeding to save...');
     setState(prev => ({ ...prev, isSaving: true, errorMessage: '' }));
 
     try {
+      console.log(isEditMode ? 'Updating audit item...' : 'Creating new audit item...', state.formData);
       if (isEditMode && editItem) {
         await spService.updateAuditItem(editItem.Id, state.formData);
         setState(prev => ({
@@ -376,12 +379,22 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           successMessage: 'Audit item updated successfully!'
         }));
       } else {
-        await spService.createAuditItem(state.formData);
+        const auditType = state.formData.AuditType || AuditType.Custom;
+        const findingId = await spService.generateFindingId(auditType, state.formData.AuditDate);
+        const createData: Partial<IAuditMasterItem> = {
+          ...state.formData,
+          AuditType: auditType,
+          FindingId: findingId
+        };
+
+        console.log('Creating new audit item with data:', createData);
+        await spService.createAuditItem(createData);
         setState(prev => ({
           ...prev,
           isSaving: false,
-          successMessage: 'Audit item created successfully!'
+          successMessage: `Audit item created successfully! Finding ID: ${findingId}`
         }));
+        console.log('Created new audit item with data:', createData);
       }
 
       setTimeout(() => onSaved(), 1200);
@@ -409,7 +422,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
   const errs = state.errors;
   const ro = state.isReadOnly;
 
-  
+
 
   return (
     <div className={styles.formContainer}>
@@ -621,7 +634,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
             label="RC Description (Root Cause)"
             disabled={ro}
             value={fd.RCDescription || ''}
-            onChange={(html:string) => updateField('RCDescription', html)}
+            onChange={(html: string) => updateField('RCDescription', html)}
           />
         </div>
         <div className={styles.fieldRow}>
@@ -630,7 +643,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               label="Quick Fix"
               disabled={ro}
               value={fd.QuickFix || ''}
-              onChange={(html:string) => updateField('QuickFix', html)}
+              onChange={(html: string) => updateField('QuickFix', html)}
             />
           </div>
         </div>
@@ -761,7 +774,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               label="Evidence (link) – URL"
               disabled={ro}
               value={fd.EvidenceLink?.Url || ''}
-              onChange={(html:string) => updateField('EvidenceLink', { Url: html || '', Description: html || '' })}
+              onChange={(html: string) => updateField('EvidenceLink', { Url: html || '', Description: html || '' })}
               placeholder="https://..."
               minHeight={168}
             />

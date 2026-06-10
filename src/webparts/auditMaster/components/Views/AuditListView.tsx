@@ -260,15 +260,15 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
             </thead>
             <tbody>
               {pageItems.map(item => (
-                <tr key={item.AuditId} onClick={() => onEditItem(item)}>
-                  <td><strong>{item.AuditId}</strong></td>
+                <tr key={item.FindingId} onClick={() => onEditItem(item)}>
+                  <td><strong>{item.FindingId}</strong></td>
                   <td title={item.Title}>{item.Title}</td>
                   <td>
                     <span className={`${styles.statusBadge} ${statusClass(item.Status)}`}>
                       {item.Status}
                     </span>
                   </td>
-                  <td>{item.PIC ? item.PIC.Title : '–'}</td>
+                  <td>{item.PIC?.Title || (item.PICId ? `User #${item.PICId}` : '–')}</td>
                   <td>{item.Service || '–'}</td>
                   <td>{item.Segment || '–'}</td>
                   <td>{formatDate(item.AuditDate)}</td>

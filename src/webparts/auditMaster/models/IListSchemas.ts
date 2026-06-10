@@ -99,7 +99,7 @@ export interface IAuditMasterItem {
 
   // 1. Title – Single line of text
   Title: string;
-  AuditId?: string; // Custom field for formatted ID like "AUD-2024-0001"
+  FindingId?: string; // Custom field for formatted ID like "AUD-2024-0001"
   // 2. PIC – Person or Group
   PICId: number;
   PIC?: { Id: number; Title: string; EMail: string };
@@ -118,9 +118,9 @@ export interface IAuditMasterItem {
 
   // 6. ISO clause – Lookup (primary, to ISOClause list → ISOClause field)
   ISOClauseId: number;
-  ISOClause?: { 
-    Id: number; 
-    ISOClause: string 
+  ISOClause?: {
+    Id: number;
+    ISOClause: string
     ISOlevel1?: string;
     ISOlevel2?: string;
     Article?: string;
@@ -132,7 +132,7 @@ export interface IAuditMasterItem {
   // 8. Segment – Single line of text
   Segment?: string;
 
-   // 8. Division – Single line of text
+  // 8. Division – Single line of text
   Division?: string;
 
   // 9. Quality Manager – Person or Group
@@ -201,7 +201,7 @@ export interface IAuditMasterItem {
   //ConfluencePage: IHyperlinkField;
 
   // 29. Category – Lookup (to AuditCategory list → Category field)
-  CategoryId: number;
+  CategoryId?: number;
   Category?: { Id: number; Category: string };
 
   // 31. Article – Dependent lookup from #30 (ISOClause for Article_lookup → Article)
@@ -255,8 +255,8 @@ export enum AuditType {
   Internal = 'Internal',
   External = 'External',
   Custom = 'Custom',
- // Certification = 'Certification',
- // Recertification = 'Recertification'
+  // Certification = 'Certification',
+  // Recertification = 'Recertification'
 }
 
 

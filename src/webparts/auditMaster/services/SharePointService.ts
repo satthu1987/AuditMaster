@@ -6,7 +6,8 @@ import {
   ICategoryItem,
   IISOClauseItem,
   ISegmentServiceItem,
-  IUserRoleItem
+  IUserRoleItem,
+  AuditType
 } from '../models';
 
 /**
@@ -184,6 +185,10 @@ export class SharePointService {
   private _serviceFieldInternalName: string = 'Service';
   private _serviceFieldEntityName: string = 'Service';
   private _serviceFieldType: string = 'Text';
+  private _isoClauseFieldEntityName: string = 'ISOClause';
+  private _qlVerificationFieldEntityName: string = 'QLVerification';
+  private _findingIdFieldEntityName: string = 'FindingId';
+  private _auditTypeFieldEntityName: string = 'AuditType';
   private _serviceFieldResolved: boolean = false;
 
   private _isServiceLookup(): boolean {
@@ -205,6 +210,74 @@ export class SharePointService {
         this._serviceFieldEntityName = (serviceField.EntityPropertyName || serviceField.InternalName || 'Service').replace(/Id$/, '');
         this._serviceFieldType = serviceField.TypeAsString || 'Text';
       }
+
+      const normalize = (value?: string): string => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isWritableField = (field: { TypeAsString?: string }): boolean => {
+        const type = normalize(field.TypeAsString);
+        return type !== 'calculated' && type !== 'computed' && type !== 'counter';
+      };
+
+      const qlNames = new Set(['qlverification', 'qx0026lverification']);
+      const isoNames = new Set(['isoclause']);
+      const findingIdNames = new Set(['findingid', 'findingx0020id']);
+      const findingLegacyNames = new Set(['findingnumber']);
+      const auditTypeNames = new Set(['audittype', 'internalexternal', 'internalx002fexternal']);
+
+      const qlVerificationField = data.value.find(f => {
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return qlNames.has(title) || qlNames.has(internal) || qlNames.has(entity);
+      });
+      if (qlVerificationField) {
+        this._qlVerificationFieldEntityName = qlVerificationField.EntityPropertyName || qlVerificationField.InternalName || 'QLVerification';
+      }
+
+      const isoClauseField = data.value.find(f => {
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return isoNames.has(title) || isoNames.has(internal) || isoNames.has(entity);
+      });
+      if (isoClauseField) {
+        this._isoClauseFieldEntityName = (isoClauseField.EntityPropertyName || isoClauseField.InternalName || 'ISOClause').replace(/Id$/, '');
+      }
+
+      const findingIdField = data.value.find(f => {
+        if (!isWritableField(f)) {
+          return false;
+        }
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return findingIdNames.has(title) || findingIdNames.has(internal) || findingIdNames.has(entity);
+      });
+      if (findingIdField) {
+        this._findingIdFieldEntityName = findingIdField.EntityPropertyName || findingIdField.InternalName || 'FindingId';
+      } else {
+        const legacyCalculatedField = data.value.find(f => {
+          const title = normalize(f.Title);
+          const internal = normalize(f.InternalName);
+          const entity = normalize(f.EntityPropertyName);
+          return findingLegacyNames.has(title) || findingLegacyNames.has(internal) || findingLegacyNames.has(entity);
+        });
+        if (legacyCalculatedField) {
+          console.warn('[SharePointService] FindingNumber is calculated and not writable. Add/confirm a writable Finding ID text column.');
+        }
+      }
+
+      const auditTypeField = data.value.find(f => {
+        if (!isWritableField(f)) {
+          return false;
+        }
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return auditTypeNames.has(title) || auditTypeNames.has(internal) || auditTypeNames.has(entity);
+      });
+      if (auditTypeField) {
+        this._auditTypeFieldEntityName = auditTypeField.EntityPropertyName || auditTypeField.InternalName || 'AuditType';
+      }
     } catch (e) {
       console.warn('[SharePointService] Could not resolve Service field metadata, using defaults.', e);
     }
@@ -221,6 +294,7 @@ export class SharePointService {
       'Id', 'Title',
       'PICId', 'QualityManagerId', 'AuditorId', 'VerifierId',
       'Status', 'FindingType', 'Region',
+      this._auditTypeFieldEntityName,
       'VerificationResult', 'InternalExternal',
       'QLVerification',
       'FindingDescription', 'QuickFix', 'ActionTaken',
@@ -231,7 +305,7 @@ export class SharePointService {
       'CategoryId',
       'Article',
       'Segment',
-      'Year', 'FindingNumber', 'VerificationDateCalculated',
+      'Year', this._findingIdFieldEntityName, 'VerificationDateCalculated',
       'Created', 'Modified'
     ].join(',');
   }
@@ -239,14 +313,13 @@ export class SharePointService {
   private _auditExpandFields(): string {
     const fields: string[] = [
       'PIC', 'QualityManager', 'Auditor', 'Verifier',
-      'ISOClause',
-      'FindingISOChapter', 'Category',
-      'ISOClauseforArticle_lookup',
-      'Service_Lookup'
+      'ISOClause', 'Category'
     ];
+
     if (this._isServiceLookup()) {
-      fields.splice(6, 0, this._serviceFieldEntityName);
+      fields.push(this._serviceFieldEntityName);
     }
+
     return fields.join(',');
   }
 
@@ -257,17 +330,88 @@ export class SharePointService {
       'Auditor/Id', 'Auditor/Title', 'Auditor/EMail',
       'Verifier/Id', 'Verifier/Title', 'Verifier/EMail',
       'ISOClause/Id', 'ISOClause/ISOClause',
-      'ISOClause/ISOlevel1', 'ISOClause/ISOlevel2',
-      'ISOClause/Article',
-      'FindingISOChapter/Id', 'FindingISOChapter/ISOClause',
-      'Category/Id', 'Category/Category',
-      'ISOClauseforArticle_lookup/Id', 'ISOClauseforArticle_lookup/ISOClause',
-      'Service_Lookup/Id', 'Service_Lookup/Title'
+      'ISOClause/ISOlevel1', 'ISOClause/ISOlevel2', 'ISOClause/Article',
+      'Category/Id', 'Category/Category'
     ];
+
     if (this._isServiceLookup()) {
-      fields.splice(16, 0, `${this._serviceFieldEntityName}/Id`, `${this._serviceFieldEntityName}/Service`);
+      fields.push(`${this._serviceFieldEntityName}/Id`, `${this._serviceFieldEntityName}/Service`);
     }
+
     return fields.join(',');
+  }
+
+  private _auditTypePrefix(auditType?: string): string {
+    if (!auditType) {
+      return 'CUA';
+    }
+
+    if (auditType === AuditType.Internal) {
+      return 'INA';
+    }
+
+    if (auditType === AuditType.External) {
+      return 'EXA';
+    }
+
+    return 'CUA';
+  }
+
+  private _pad3(value: number): string {
+    if (value < 10) {
+      return `00${value}`;
+    }
+    if (value < 100) {
+      return `0${value}`;
+    }
+    return `${value}`;
+  }
+
+  public async generateFindingId(auditType: AuditType, auditDate?: string): Promise<string> {
+    await this._ensureAuditServiceFieldNames();
+
+    const now = auditDate ? new Date(auditDate) : new Date();
+    const year = now.getFullYear();
+    const yy = `${year}`.slice(-2);
+    const prefix = this._auditTypePrefix(auditType);
+
+    const auditTypeField = this._auditTypeFieldEntityName;
+    const findingIdField = this._findingIdFieldEntityName;
+
+    const select = `Id,AuditDate,Created,${auditTypeField},${findingIdField}`;
+    const filter = `${auditTypeField} eq '${String(auditType).replace(/'/g, "''")}'`;
+    const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items?$select=${select}&$filter=${filter}&$top=5000`;
+    const data = await this._get<{ value: any[] }>(url);
+
+    let maxSeq = 0;
+
+    for (const item of data.value) {
+      const dt = item.AuditDate || item.Created;
+      if (!dt) {
+        continue;
+      }
+      const d = new Date(dt);
+      if (d.getFullYear() !== year) {
+        continue;
+      }
+
+      const findingId = typeof item[findingIdField] === 'string' ? item[findingIdField] : '';
+      const expectedPrefix = `${prefix}-${yy}-`;
+      if (findingId.indexOf(expectedPrefix) !== 0) {
+        continue;
+      }
+      const seqPart = findingId.slice(expectedPrefix.length);
+      if (!/^\d{3}$/.test(seqPart)) {
+        continue;
+      }
+      const seq = parseInt(seqPart, 10);
+      if (seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    return `${prefix}-${yy}-${this._pad3(nextSeq)}`;
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -447,6 +591,8 @@ export class SharePointService {
   public async createAuditItem(item: Partial<IAuditMasterItem>): Promise<IAuditMasterItem> {
     await this._ensureAuditServiceFieldNames();
     const payload = this._buildAuditPayload(item);
+    console.log('[SharePointService] createAuditItem: payload →', payload);
+
     const url = `${this._listUrl(LIST_NAMES.AUDIT_MASTER)}/items`;
     return this._post<IAuditMasterItem>(url, payload);
   }
@@ -471,16 +617,18 @@ export class SharePointService {
     // Single line of text
     if (item.Title !== undefined) payload.Title = item.Title;
     if (item.PIONumber !== undefined) payload.PIONumber = item.PIONumber;
+    if (item.FindingId !== undefined) payload[this._findingIdFieldEntityName] = item.FindingId;
 
     // Choice fields
     if (item.Status !== undefined) payload.Status = item.Status;
     if (item.FindingType !== undefined) payload.FindingType = item.FindingType;
+    if (item.AuditType !== undefined) payload[this._auditTypeFieldEntityName] = item.AuditType;
     if (item.VerificationResult !== undefined) payload.VerificationResult = item.VerificationResult;
-    if (item.QLVerification !== undefined) payload.Q_x0026_Lverification = item.QLVerification;
+    if (item.QLVerification !== undefined) payload[this._qlVerificationFieldEntityName] = item.QLVerification;
 
     // Multiple lines of text
     if (item.FindingDescription !== undefined) payload.FindingDescription = item.FindingDescription;
-    if (item.QuickFix !== undefined) payload.Quickfix = item.QuickFix;
+    if (item.QuickFix !== undefined) payload.QuickFix = item.QuickFix;
     if (item.ActionTaken !== undefined) payload.ActionTaken = item.ActionTaken;
     if (item.RCDescription !== undefined) payload.RCdescription = item.RCDescription;
 
@@ -499,7 +647,7 @@ export class SharePointService {
     if (item.AuditorId !== undefined) payload.AuditorId = item.AuditorId;
 
     // Lookup IDs (primary lookups only – dependent lookups are read-only)
-    if (item.ISOClauseId !== undefined) payload.ISOclauseId = item.ISOClauseId;
+    if (item.ISOClauseId !== undefined) payload[`${this._isoClauseFieldEntityName}Id`] = item.ISOClauseId;
     if (item.CategoryId !== undefined) payload.CategoryId = item.CategoryId;
 
     // Service supports both Text and Lookup list designs
