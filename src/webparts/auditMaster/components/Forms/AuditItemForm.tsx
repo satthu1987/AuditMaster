@@ -194,7 +194,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         isoLevel: '',
         isoArticle: '',
         isLoadingISO: false,
-        formData: { ...prev.formData, ISOClauseId: undefined as any }
+        formData: { ...prev.formData, ISOClauseId: undefined as any, Article: '' }
       }));
       return;
     }
@@ -209,7 +209,8 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         isLoadingISO: false,
         isoChapter: clause.ISOlevel2 || '',
         isoLevel: clause.ISOlevel1 || '',
-        isoArticle: clause.Article || ''
+        isoArticle: clause.Article || '',
+        formData: { ...prev.formData, Article: clause.Article || '' }
       }));
     } catch (err) {
       // Fallback to the cached list if the single-item fetch fails
@@ -221,6 +222,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         isoChapter: cached ? (cached.ISOlevel2 || '') : '',
         isoLevel: cached ? (cached.ISOlevel1 || '') : '',
         isoArticle: cached ? (cached.Article || '') : '',
+        formData: { ...prev.formData, Article: cached ? (cached.Article || '') : '' },
         errorMessage: cached ? '' : `Failed to load ISO Clause details: ${errorMessage}`
       }));
     }

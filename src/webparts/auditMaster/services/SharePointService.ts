@@ -198,6 +198,7 @@ export class SharePointService {
   private _auditTypeFieldEntityName: string = 'AuditType';
   private _verifierFieldEntityName: string = 'Verifier';
   private _rcDescriptionFieldInternalName: string = 'RCdescription';
+  private _articleFieldInternalName: string = 'Article';
   private _serviceFieldResolved: boolean = false;
 
   private _isServiceLookup(): boolean {
@@ -249,6 +250,7 @@ export class SharePointService {
       const auditTypeNames = new Set(['audittype', 'internalexternal', 'internalx002fexternal']);
       const verifierNames = new Set(['verifier', 'verifiedby', 'verifiedx0020by']);
       const rcDescriptionNames = new Set(['rcdescription', 'rcx0020description', 'rootcause', 'rootcausedescription']);
+      const articleNames = new Set(['article']);
 
       const qlVerificationField = data.value.find(f => {
         const title = normalize(f.Title);
@@ -360,6 +362,19 @@ export class SharePointService {
       });
       if (rcDescriptionField) {
         this._rcDescriptionFieldInternalName = rcDescriptionField.InternalName || rcDescriptionField.EntityPropertyName || 'RCdescription';
+      }
+
+      const articleField = data.value.find(f => {
+        if (!isWritableField(f)) {
+          return false;
+        }
+        const title = normalize(f.Title);
+        const internal = normalize(f.InternalName);
+        const entity = normalize(f.EntityPropertyName);
+        return articleNames.has(title) || articleNames.has(internal) || articleNames.has(entity);
+      });
+      if (articleField) {
+        this._articleFieldInternalName = articleField.InternalName || articleField.EntityPropertyName || 'Article';
       }
     } catch (e) {
       console.warn('[SharePointService] Could not resolve Service field metadata, using defaults.', e);
@@ -715,6 +730,7 @@ export class SharePointService {
     if (item.QuickFix !== undefined) payload.QuickFix = item.QuickFix;
     if (item.ActionTaken !== undefined) payload.ActionTaken = item.ActionTaken;
     if (item.RCDescription !== undefined) payload[this._rcDescriptionFieldInternalName] = item.RCDescription;
+    if (item.Article !== undefined) payload[this._articleFieldInternalName] = item.Article;
 
     // Date fields
     if (item.DueDate !== undefined) payload.DueDate = item.DueDate;
