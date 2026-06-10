@@ -271,12 +271,17 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
       text: s.Service || s.Title
     }));
 
-    const divisionOptions: IDropdownOption[] = state.segmentServices
-    .filter(s => !state.formData.Segment || s.Title === state.formData.Segment)
-    .map(s => ({
-      key: s.Division || s.Title,
-      text: s.Division || s.Title
-    }));
+    const divisionOptions: IDropdownOption[] = Array.from(
+    new Set(
+      state.segmentServices
+        .filter(s => !state.formData.Segment || s.Title === state.formData.Segment)
+        .map(s => (s.Division || s.Title || '').trim())
+        .filter(v => v.length > 0)
+    )
+  ).map(division => ({
+    key: division,
+    text: division
+  }));
 
 
   const getUserRoleOptions = (allowedRoles: string[]): IDropdownOption[] => Array.from(
