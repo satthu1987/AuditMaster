@@ -74,7 +74,7 @@ const AuditListView: React.FC<IAuditListViewProps> = (props) => {
           items = await spService.getAuditItemsByPIC(currentUser.id);
           break;
         case 'myPending':
-          items = await spService.getAuditItemsForVerifier(currentUser.segmentServiceIds || []);
+          items = await spService.getAuditItemsForVerifier(currentUser.id);
           break;
         default:
           items = await spService.getAllAuditItems();

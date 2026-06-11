@@ -76,7 +76,7 @@ interface IFormState {
   isoArticle: string;
 }
 
-const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
+const Verifier_Detail: React.FC<IAuditItemFormProps> = (props) => {
   const { spService, roleService, currentUser, editItem, onSaved, onCancel } = props;
 
   const isEditMode = !!editItem;
@@ -191,14 +191,9 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
     const errs: IValidationErrors = {};
     const fd = state.formData;
 
-    if (!fd.Title || fd.Title.trim() === '') {
-      errs.Title = 'Title is required.';
-    }
-    if (!fd.Status) {
-      errs.Status = 'Status is required.';
-    }
-    if (!fd.FindingDescription || fd.FindingDescription.trim() === '') {
-      errs.FindingDescription = 'Finding Description is required.';
+    const evidenceValue = (fd.EvidenceLink?.Description || fd.EvidenceLink?.Url || '').trim();
+    if (!evidenceValue) {
+      errs.EvidenceLink = 'Evidence URL is required.';
     }
 
     return errs;
@@ -216,12 +211,14 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
 
     try {
       if (isEditMode && editItem) {
-        // The service payload builder strips read-only / calculated fields, so
-        // it is safe to send the full formData even though only a subset is
-        // editable by the PIC.
-        await spService.updateAuditItem(editItem.Id, state.formData);
+        const payload = {
+          ...state.formData,
+          Status: AuditStatus.Verification
+        };
+        await spService.updateAuditItem(editItem.Id, payload);
         setState(prev => ({
           ...prev,
+          formData: { ...prev.formData, Status: AuditStatus.Verification },
           isSaving: false,
           successMessage: 'Audit item updated successfully!'
         }));
@@ -279,7 +276,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
         {`Audit Item – ${fd.Title || ''}`}
       </div>
       <div className={styles.formSubtitle}>
-        PIC view – update the finding details, status and verification information.
+        Verifier view – provide Evidence URL only.
       </div>
 
       {state.successMessage && (
@@ -298,9 +295,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
         </div>
       ) : (
         <MessageBar messageBarType={MessageBarType.info} isMultiline={true}>
-          As the PIC you can edit the <strong>Finding Details</strong>, the{' '}
-          <strong>Status</strong> field, and the <strong>Verification &amp; Links</strong>{' '}
-          section. All other sections are shown for context and are read-only.
+          As the Verifier you can edit the <strong>Evidence URL</strong> field only.
         </MessageBar>
       )}
 
@@ -312,7 +307,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
             <TextField
               label="Title"
               required
-              disabled={ro}
+              disabled
               value={fd.Title || ''}
               onChange={(_, v) => updateField('Title', v)}
               errorMessage={errs.Title}
@@ -323,7 +318,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <TextField
               label="PIONumber"
-              disabled={ro}
+              disabled
               value={fd.PIONumber || ''}
               onChange={(_, v) => updateField('PIONumber', v)}
               placeholder="e.g. PIO-2026-001"
@@ -332,7 +327,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <TextField
               label="Finding Type"
-              disabled={ro}
+              disabled
               readOnly
               value={fd.FindingType || ''}
             />
@@ -340,7 +335,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
              <TextField
               label="Audit Type"
-              disabled={ro}
+              disabled
               readOnly
               value={fd.AuditType || ''}
             />
@@ -350,7 +345,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <RichTextEditor
             label="Finding Description"
             minHeight={160}
-            disabled={ro}
+            disabled
             value={fd.FindingDescription}
             onChange={(html: string) => updateField('FindingDescription', html)}
           />
@@ -364,9 +359,9 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <TextField
               label="ISO Clause"
-              disabled={ro}
+              disabled
               readOnly
-              value={fd.ISOClause.ISOClause || ''}
+              value={fd.ISOClause?.ISOClause || ''}
             />
           </div>
           <div>
@@ -374,7 +369,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Chapter"
               readOnly
               disabled
-              value={fd.ISOClause.ISOClause}
+              value={fd.ISOClause?.ISOClause || ''}
             />
           </div>
           <div>
@@ -382,7 +377,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="ISO Level"
               readOnly
               disabled
-              value={fd.ISOChapter.ISOlevel1}
+              value={fd.ISOChapter?.ISOlevel1 || ''}
             />
           </div>
           <div>
@@ -390,7 +385,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Article"
               readOnly
               disabled
-              value={fd.Article}
+              value={fd.Article || ''}
             />
           </div>
         </div>
@@ -400,7 +395,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Segment"
               readOnly
               disabled
-              value={fd.Segment}
+              value={fd.Segment || ''}
             />
           </div>
           <div>
@@ -408,7 +403,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Service"
               readOnly
               disabled
-              value={fd.Service}
+              value={fd.Service || ''}
             />
           </div>
           <div>
@@ -416,7 +411,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Division"
               readOnly
               disabled
-              value={fd.Division}
+              value={fd.Division || ''}
             />
           </div>
         </div>
@@ -429,7 +424,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
         <div className={styles.fieldFull}>
           <RichTextEditor
             label="RC Description (Root Cause)"
-            disabled={ro}
+            disabled
             value={fd.RCDescription || ''}
             onChange={(html:string) => updateField('RCDescription', html)}
           />
@@ -438,9 +433,20 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <RichTextEditor
               label="Quick Fix"
-              disabled={ro}
+              disabled
               value={fd.QuickFix || ''}
               onChange={(html:string) => updateField('QuickFix', html)}
+            />
+          </div>
+        </div>
+        <div className={styles.fieldRow}>
+          <div>
+            <RichTextEditor
+              label="Action Taken"
+              disabled
+              value={fd.ActionTaken || ''}
+              onChange={(html:string) => updateField('ActionTaken', html)}
+              minHeight={140}
             />
           </div>
         </div>
@@ -456,7 +462,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="PIC"
               readOnly
               disabled
-              value={fd.PIC.Title}
+              value={fd.PIC?.Title || ''}
             />
           </div>
         </div>
@@ -466,7 +472,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Auditor"
               readOnly
               disabled
-              value={fd.Auditor.Title}
+              value={fd.Auditor?.Title || ''}
             />
           </div>
           <div>
@@ -474,7 +480,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Verified by"
               readOnly
               disabled
-              value={fd.Verifier.Title}
+              value={fd.Verifier?.Title || ''}
             />
           </div>
         </div>
@@ -489,7 +495,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Status"
               readOnly
               disabled
-              value={fd.Status}
+              value={fd.Status || ''}
             />
           </div>
         </div>
@@ -499,7 +505,15 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
               label="Audit Date"
               readOnly
               disabled
-              value={fd.AuditDate}
+              value={fd.AuditDate || ''}
+            />
+          </div>
+          <div>
+            <DatePicker
+              label="Due Date"
+              disabled
+              value={fd.DueDate ? new Date(fd.DueDate) : undefined}
+              onSelectDate={(date) => updateField('DueDate', date ? date.toISOString() : '')}
             />
           </div>
         </div>
@@ -512,7 +526,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <Dropdown
               label="Verification Result"
-              disabled={ro}
+              disabled
               selectedKey={fd.VerificationResult || undefined}
               options={toDropdownOptions(Object.values(VerificationResult))}
               onChange={(_, opt) => updateField('VerificationResult', opt?.key)}
@@ -521,7 +535,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <Dropdown
               label="Q&L Verification"
-              disabled={ro}
+              disabled
               selectedKey={fd.QLVerification || undefined}
               options={toDropdownOptions(Object.values(VerificationResult))}
               onChange={(_, opt) => updateField('QLVerification', opt?.key)}
@@ -532,7 +546,7 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <DatePicker
               label="Verification Date"
-              disabled={ro}
+              disabled
               value={fd.VerificationDate ? new Date(fd.VerificationDate) : undefined}
               onSelectDate={(date) => updateField('VerificationDate', date ? date.toISOString() : '')}
             />
@@ -542,12 +556,14 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
           <div>
             <RichTextEditor
               label="Evidence (link) – URL"
+              required
               disabled={ro}
-              value={fd.EvidenceLink?.Url || ''}
+              value={fd.EvidenceLink?.Description || fd.EvidenceLink?.Url || ''}
               onChange={(html:string) => updateField('EvidenceLink', { Url: html || '', Description: html || '' })}
               placeholder="https://..."
               minHeight={168}
             />
+            {errs.EvidenceLink && <span style={{ color: '#a4262c', fontSize: 12 }}>{errs.EvidenceLink}</span>}
           </div>
         </div>
       </div>
@@ -589,4 +605,4 @@ const PIC_Detail: React.FC<IAuditItemFormProps> = (props) => {
   );
 };
 
-export default PIC_Detail;
+export default Verifier_Detail;

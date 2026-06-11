@@ -112,15 +112,16 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           spService.getUserRoles()
         ]);
 
-        const roleUserIds = Array.from(
-          new Set(
-            userRoles
-              .filter(r => r.AccountId)
-              .map(r => r.AccountId)
-          )
-        );
-
-
+        const usersById = userRoles.reduce((acc, role) => {
+          if (role.AccountId && role.Account) {
+            acc[role.AccountId] = {
+              Id: role.Account.Id,
+              Title: role.Account.Title,
+              Email: role.Account.EMail
+            };
+          }
+          return acc;
+        }, {} as { [id: number]: { Id: number; Title: string; Email: string } });
 
         // Pre-populate derived ISO Clause fields when editing an existing item
         let isoChapter = '';
@@ -142,6 +143,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
           isoClauses,
           segmentServices,
           userRoles,
+          usersById,
           isLoading: false,
           isoChapter,
           isoLevel,
@@ -300,7 +302,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
 
     const text = user
       ? `${user.Title}${user.Email ? ` (${user.Email})` : ''}`
-      : (accountLabel || `User ${r.AccountId}`);
+      : (r.Title || accountLabel || `User ${r.AccountId}`);
 
     return {
       key: r.AccountId,
@@ -347,9 +349,6 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
     }
     if (!fd.AuditDate) {
       errs.AuditDate = 'Audit Date is required.';
-    }
-    if (!fd.DueDate) {
-      errs.DueDate = 'Due Date is required.';
     }
     if (!fd.FindingDescription || fd.FindingDescription.trim() === '') {
       errs.FindingDescription = 'Finding Description is required.';
@@ -723,17 +722,7 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
               textField={{ errorMessage: errs.AuditDate }}
             />
           </div>
-          <div>
-            <DatePicker
-              label="Due Date"
-              isRequired={true}
-              disabled={ro}
-              value={fd.DueDate ? new Date(fd.DueDate) : undefined}
-              onSelectDate={(date) => updateField('DueDate', date ? date.toISOString() : '')}
-              placeholder="Select due date"
-              textField={{ errorMessage: errs.DueDate }}
-            />
-          </div>
+
         </div>
       </div>
 
@@ -772,12 +761,13 @@ const AuditItemForm: React.FC<IAuditItemFormProps> = (props) => {
         </div>
         <div className={styles.fieldRow}>
           <div>
-            <TextField
+            <RichTextEditor
               label="Evidence (link) – URL"
               disabled={ro}
-              value={fd.EvidenceLink?.Url || ''}
-              onChange={(_, v) => updateField('EvidenceLink', { Url: (v || '').trim(), Description: (v || '').trim() })}
-              placeholder="https://..."
+              value={fd.EvidenceLink?.Description || fd.EvidenceLink?.Url || ''}
+              onChange={(html: string) => updateField('EvidenceLink', { Url: html, Description: html })}
+              placeholder="Enter evidence details..."
+              minHeight={120}
             />
           </div>
         </div>

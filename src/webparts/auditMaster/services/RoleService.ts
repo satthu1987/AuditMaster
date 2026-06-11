@@ -71,13 +71,7 @@ export class RoleService {
         return item.PICId === user.id;
 
       case UserRole.Verifier:
-        // Verifier can update items belonging to their segment/department
-        if (user.segmentServiceIds && user.segmentServiceIds.length > 0) {
-          return user.segmentServiceIds.indexOf(item.ServiceId) !== -1;
-        }
-        // Fallback: verifier with no explicit segment restriction can verify
-        // items in "Pending Verification" status
-        return item.Status === 'Verification';
+        return item.VerifierId === user.id;
 
       default:
         return false; // Viewer – read only

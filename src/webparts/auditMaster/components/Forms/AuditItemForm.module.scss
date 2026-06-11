@@ -4,6 +4,25 @@
   max-width: 960px;
   margin: 0 auto;
   padding: 24px;
+
+  :global(.ms-TextField.is-disabled .ms-TextField-fieldGroup),
+  :global(.ms-TextField.is-disabled .ms-TextField-wrapper .ms-TextField-fieldGroup),
+  :global(.ms-Dropdown.is-disabled .ms-Dropdown-title),
+  :global(.ms-DatePicker .ms-TextField.is-disabled .ms-TextField-fieldGroup),
+  :global(.ql-container.ql-disabled),
+  :global(.ql-toolbar.ql-snow + .ql-container.ql-snow.ql-disabled) {
+    background-color: #f3f2f1;
+  }
+
+  :global(.ms-TextField.is-disabled .ms-TextField-field),
+  :global(.ms-Dropdown.is-disabled .ms-Dropdown-title),
+  :global(.ms-DatePicker .ms-TextField.is-disabled .ms-TextField-field),
+  :global(.ms-TextField.is-disabled .ms-Label),
+  :global(.ms-Dropdown.is-disabled .ms-Label),
+  :global(.ms-DatePicker .ms-Label) {
+    color: #a19f9d;
+    -webkit-text-fill-color: #a19f9d;
+  }
 }
 
 .formTitle {

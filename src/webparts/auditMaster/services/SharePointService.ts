@@ -151,14 +151,21 @@ export class SharePointService {
 
   public async getUserRoles(): Promise<IUserRoleItem[]> {
     const data = await this._get<{ value: any[] }>(
-      `${this._listUrl(LIST_NAMES.USER_ROLE)}/items?$select=Id,Title,AccountId,Role&$top=500`
+      `${this._listUrl(LIST_NAMES.USER_ROLE)}/items` +
+      `?$select=Id,Title,AccountId,Role,Account/Id,Account/Title,Account/EMail` +
+      `&$expand=Account` +
+      `&$top=500`
     );
     return data.value;
   }
 
   public async getUserRoleForUser(userId: number): Promise<IUserRoleItem | null> {
     const data = await this._get<{ value: any[] }>(
-      `${this._listUrl(LIST_NAMES.USER_ROLE)}/items?$select=Id,Title,AccountId,Role&$filter=AccountId eq ${userId}&$top=1`
+      `${this._listUrl(LIST_NAMES.USER_ROLE)}/items` +
+      `?$select=Id,Title,AccountId,Role,Account/Id,Account/Title,Account/EMail` +
+      `&$expand=Account` +
+      `&$filter=AccountId eq ${userId}` +
+      `&$top=1`
     );
     return data.value.length > 0 ? data.value[0] : null;
   }
@@ -621,31 +628,10 @@ export class SharePointService {
    * Get Audit items pending verification filtered by Service lookup IDs
    * (Verifier view).
    */
-  public async getAuditItemsForVerifier(
-    segmentServiceIds: number[]
-  ): Promise<IAuditMasterItem[]> {
+  public async getAuditItemsForVerifier(userId: number): Promise<IAuditMasterItem[]> {
     await this._ensureAuditServiceFieldNames();
-    let filter = '';
-    if (segmentServiceIds.length > 0) {
-      if (this._isServiceLookup()) {
-        const conditions = segmentServiceIds.map(id => `${this._serviceFieldEntityName}Id eq ${id}`);
-        filter = `&$filter=(${conditions.join(' or ')}) and (Status eq 'Pending Verification')`;
-      } else {
-        const segmentServices = await this.getSegmentServices();
-        const serviceNames = segmentServices
-          .filter(s => segmentServiceIds.indexOf(s.Id) !== -1)
-          .map(s => (s.Service || s.Title || '').trim())
-          .filter(s => s.length > 0);
-        if (serviceNames.length > 0) {
-          const conditions = serviceNames.map(name => `${this._serviceFieldEntityName} eq '${name.replace(/'/g, "''")}'`);
-          filter = `&$filter=(${conditions.join(' or ')}) and (Status eq 'Pending Verification')`;
-        } else {
-          filter = `&$filter=Status eq 'Pending Verification'`;
-        }
-      }
-    } else {
-      filter = `&$filter=Status eq 'Pending Verification'`;
-    }
+    const verifierIdField = `${this._verifierFieldEntityName}Id`;
+    const filter = `&$filter=${verifierIdField} eq ${userId}`;
     return this._fetchAuditItems('getAuditItemsForVerifier', filter);
   }
 
@@ -706,6 +692,42 @@ export class SharePointService {
     await this._merge(url, payload);
   }
 
+  private _decodeHtml(value: string): string {
+    return value
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ');
+  }
+
+  private _stripHtml(value: string): string {
+    return this._decodeHtml(value).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  private _extractFirstUrl(value: string): string {
+    const decoded = this._decodeHtml(value || '');
+    const hrefMatch = decoded.match(/href\s*=\s*["']([^"']+)["']/i);
+    if (hrefMatch && hrefMatch[1]) {
+      return hrefMatch[1].trim();
+    }
+    const textOnly = this._stripHtml(decoded);
+    const urlMatch = decoded.match(/https?:\/\/[^\s<>"']+/i) || textOnly.match(/https?:\/\/[^\s<>"']+/i);
+    return urlMatch && urlMatch[0] ? urlMatch[0].trim() : '';
+  }
+
+  private _normalizeEvidenceLink(evidenceLink: IAuditMasterItem['EvidenceLink']): IAuditMasterItem['EvidenceLink'] {
+    const rawUrl = evidenceLink?.Url || '';
+    const rawDescription = evidenceLink?.Description || '';
+    const normalizedUrl = this._extractFirstUrl(rawUrl) || this._extractFirstUrl(rawDescription);
+    const normalizedDescription = this._stripHtml(rawDescription) || this._stripHtml(rawUrl) || normalizedUrl;
+    return {
+      Url: normalizedUrl,
+      Description: normalizedDescription
+    };
+  }
+
   /**
    * Build a clean payload stripping read-only, calculated, and expand fields.
    * Uses the exact internal field names that SharePoint REST API expects.
@@ -739,7 +761,12 @@ export class SharePointService {
 
     // Hyperlink fields – stored as { Url, Description }
     if (item.EvidenceLink !== undefined) {
-      payload.EvidenceLink = item.EvidenceLink;
+      const normalizedEvidence = this._normalizeEvidenceLink(item.EvidenceLink);
+      if (normalizedEvidence.Url) {
+        payload.EvidenceLink = normalizedEvidence;
+      } else {
+        payload.EvidenceLink = { Url: '', Description: '' };
+      }
     }
 
     // Person field IDs
